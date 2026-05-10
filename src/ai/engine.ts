@@ -7,14 +7,22 @@ import { LEVELS, Difficulty } from "./levels";
 import { rankPlays, pickWithNoise, score0ply } from "./search";
 import { heuristicEvaluator } from "./heuristic";
 import { Evaluator } from "./evaluator";
+import { NeuralEvaluator } from "./neural";
+
+let neuralEv: NeuralEvaluator | null = null;
+export function setNeuralEvaluator(ev: NeuralEvaluator | null) {
+  neuralEv = ev;
+}
+export function hasNeural(): boolean {
+  return neuralEv !== null;
+}
 
 function evaluatorFor(name: string): Evaluator {
-  // Until pubeval/neural weights are trained, all paths use the heuristic.
-  // The ranking remains correct; quality comes from search depth + noise.
   switch (name) {
-    case "heuristic":
-    case "pubeval":
     case "neural":
+      return neuralEv ?? heuristicEvaluator;
+    case "pubeval":
+    case "heuristic":
     default:
       return heuristicEvaluator;
   }

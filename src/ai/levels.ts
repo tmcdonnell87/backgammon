@@ -38,10 +38,10 @@ export const LEVELS: Record<Difficulty, LevelConfig> = {
   },
   expert: {
     difficulty: "expert",
-    evaluator: "pubeval",
+    evaluator: "neural",
     plies: 2,
     noise: 0,
-    analysisEvaluator: "pubeval",
+    analysisEvaluator: "neural",
     analysisPlies: 2,
   },
 };

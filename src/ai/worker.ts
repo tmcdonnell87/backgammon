@@ -1,9 +1,18 @@
 // Web Worker entry. Hosts the AI engine off the main thread.
 
-import { analyzeMove, pickMove } from "./engine";
+import { analyzeMove, pickMove, setNeuralEvaluator } from "./engine";
 import { Difficulty } from "./levels";
 import { Play } from "../engine/moves";
 import { Position } from "../engine/position";
+import { loadNeuralEvaluator } from "./neural";
+
+// Best-effort load of trained Expert weights. If absent, neural tiers
+// transparently fall back to the heuristic.
+loadNeuralEvaluator("/weights/expert.json")
+  .then((ev) => {
+    if (ev) setNeuralEvaluator(ev);
+  })
+  .catch(() => {});
 
 type Req =
   | { id: number; type: "pick"; pos: Position; legalPlays: Play[]; difficulty: Difficulty }
