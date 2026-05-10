@@ -39,11 +39,13 @@ from encoding import encode
 from net import Net, save_npz, load_npz
 
 
-# Hyperparameters (TD-Gammon-ish).
-ALPHA = 0.1
-LAMBDA = 0.7
+# Hyperparameters. With our 1-output sigmoid + eligibility traces, alpha=0.1
+# diverges (weight norms blow up after ~5k games of self-play). 0.03 with
+# lambda=0.5 trains stably; the effective per-trace step is alpha/(1-lambda)
+# which we want < ~0.1.
+ALPHA = 0.03
+LAMBDA = 0.5
 GAMMA = 1.0           # episodic, no discount inside a game
-INIT_EPS_GAMES = 0    # exploration off by default
 
 
 def _argmax_play(p: Position, plays, net: Net) -> int:
