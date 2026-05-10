@@ -1,0 +1,254 @@
+:root {
+  color-scheme: dark;
+  --bg: #1a1d24;
+  --bg-2: #232730;
+  --board: #5a3a2a;
+  --board-edge: #2c1a10;
+  --point-light: #c79e74;
+  --point-dark: #6e3b1f;
+  --bar: #3a2418;
+  --checker-w: #f5f1e6;
+  --checker-w-edge: #b6ad96;
+  --checker-b: #2c2c33;
+  --checker-b-edge: #595963;
+  --highlight: #ffd24a;
+  --legal: #6dd47e;
+  --text: #e8e6e0;
+  --text-dim: #9a958a;
+  --accent: #ffb347;
+  --danger: #ff7e7e;
+  --good: #6dd47e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+button {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.55em 1.1em;
+  border: 1px solid #4a4f5a;
+  background: #2b303b;
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+button:hover:not(:disabled) {
+  background: #353b48;
+  border-color: #6a7080;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  color: #1a1d24;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) {
+  background: #ffc56b;
+  border-color: #ffc56b;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: var(--bg-2);
+  border-bottom: 1px solid #2c2f38;
+  flex: 0 0 auto;
+}
+.topbar .title {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.topbar .score {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.board-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  min-height: 0;
+}
+
+.board-svg {
+  width: 100%;
+  height: 100%;
+  max-width: 1100px;
+  max-height: 100%;
+}
+
+.controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: var(--bg-2);
+  gap: 0.5rem;
+  border-top: 1px solid #2c2f38;
+  flex-wrap: wrap;
+}
+.controls .left,
+.controls .right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.controls .turn-label {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+.controls .turn-label strong {
+  color: var(--text);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+.modal {
+  background: var(--bg-2);
+  border: 1px solid #353b48;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal h2 {
+  margin-top: 0;
+}
+.modal label {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+  color: var(--text-dim);
+}
+.modal label > span {
+  margin-bottom: 0.25rem;
+}
+.modal select,
+.modal input[type="text"],
+.modal input[type="number"] {
+  background: #1f232c;
+  color: var(--text);
+  border: 1px solid #3a3f4a;
+  border-radius: 6px;
+  padding: 0.45em 0.6em;
+  font-family: inherit;
+  font-size: 1rem;
+}
+.modal .checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+.modal .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.pass-screen {
+  text-align: center;
+  padding: 2rem;
+}
+.pass-screen h2 {
+  font-size: 1.6rem;
+  margin: 0 0 1rem;
+}
+
+.tutor-card {
+  background: var(--bg-2);
+  border: 1px solid #353b48;
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+.tutor-card .label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.tutor-card.good .label {
+  color: var(--good);
+}
+.tutor-card.doubtful .label {
+  color: #e6c44a;
+}
+.tutor-card.error .label {
+  color: var(--accent);
+}
+.tutor-card.blunder .label {
+  color: var(--danger);
+}
+.tutor-card .detail {
+  margin-top: 0.25rem;
+  color: var(--text);
+}
+
+.report {
+  font-size: 0.95rem;
+}
+.report table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.report td {
+  padding: 0.25rem 0.5rem;
+}
+.report td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .controls {
+    font-size: 0.9rem;
+  }
+  button {
+    padding: 0.5em 0.85em;
+  }
+}

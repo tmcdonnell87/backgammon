@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#5a3a2a"/>
+  <rect x="40" y="40" width="432" height="432" rx="32" fill="#6e3b1f"/>
+  <!-- Bar -->
+  <rect x="240" y="40" width="32" height="432" fill="#3a2418"/>
+  <!-- Two triangles to suggest the board -->
+  <polygon points="80,40 160,40 120,260" fill="#c79e74"/>
+  <polygon points="352,40 432,40 392,260" fill="#c79e74"/>
+  <polygon points="80,472 160,472 120,252" fill="#c79e74"/>
+  <polygon points="352,472 432,472 392,252" fill="#c79e74"/>
+  <!-- Two checkers -->
+  <circle cx="120" cy="100" r="34" fill="#f5f1e6" stroke="#b6ad96" stroke-width="3"/>
+  <circle cx="392" cy="412" r="34" fill="#2c2c33" stroke="#595963" stroke-width="3"/>
+</svg>
