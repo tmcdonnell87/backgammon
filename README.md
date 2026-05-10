@@ -40,26 +40,42 @@ Deferred (planned for follow-up):
 
 ## Training the neural-net evaluator
 
-The Expert tier loads weights from `public/weights/expert.json` if present and
-falls back to the heuristic otherwise. The weights are produced by a TD(λ)
-self-play trainer (TD-Gammon style) under `training/`:
+The shipped `public/weights/expert.json` was trained by TD(λ) self-play with
+heuristic distillation as a warm start. Reproducing the run:
 
 ```bash
 python3 -m pip install numpy
 cd training
-python3 train.py --out runs/expert --games 1000000 --ckpt-every 5000 --hidden 80
-# checkpoints land in runs/expert/{ckpt-N.npz, weights-N.json, weights-latest.json}
 
-# publish the latest checkpoint to the web app:
-./publish.sh
+# 1. Distill the heuristic into the net (~3 min): collects 200k positions
+#    via heuristic self-play and regresses against heuristic equity.
+python3 distill.py --out runs/distill --positions 200000 --epochs 30 \
+                   --lr 0.2 --hidden 120
+
+# 2. Resume TD-lambda from the distilled checkpoint (~1.5 hours per 100k
+#    games on CPU). SIGTERM cleanly writes a final checkpoint.
+mkdir -p runs/expert
+cp runs/distill/ckpt-distill.npz runs/expert/ckpt-init.npz
+python3 train.py --out runs/expert --games 1000000 --ckpt-every 5000 \
+                 --hidden 120 --alpha 0.02 --lambda 0.5 \
+                 --resume runs/expert/ckpt-init.npz
+
+# 3. Bench candidates and head-to-head to decide what to ship:
+python3 bench.py --weights runs/expert/weights-N.json --games 800
+python3 match_nets.py --A runs/expert/weights-N.json \
+                      --B runs/expert/weights-PUBLISHED.json --games 1000
+
+# 4. Publish to the web app:
+cp runs/expert/weights-N.json ../public/weights/expert.json
 ```
 
-`train.py` writes a CSV log (`log.csv`) and prints progress every 50 games.
-Average plies per game drops sharply as the net learns to bear off and avoid
-dancing, which is a useful coarse signal. Sustained throughput on a CPU is
-~20 games/s at hidden=80; an overnight run yields ~1M games. Training is
-resumable (`--resume runs/expert/ckpt-final.npz`), and `SIGTERM` triggers a
-clean final checkpoint.
+Hyperparameters that mattered: starting from scratch with `alpha=0.1` (the
+TD-Gammon default-ish) diverges around 5-10k games — weight norms blow up and
+the policy regresses to near-random. `alpha=0.03 lambda=0.5` (effective
+per-trace step `alpha/(1-lambda) = 0.06`) trains stably. The heuristic
+warm-start cuts the time-to-parity from "many hours" to about 15k self-play
+games. The shipped checkpoint reaches ~75% vs heuristic over 800 games at 0
+ply; gains plateau there with the current architecture.
 
 Encoding (198 inputs: 4 features per point per side + bar/off/turn) and the
 forward pass are mirrored exactly between Python (`training/encoding.py`,
