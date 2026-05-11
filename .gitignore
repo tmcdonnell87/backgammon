@@ -9,3 +9,5 @@ coverage/
 training/runs/
 training/__pycache__/
 __pycache__/
+*.bundle
+training/_*
