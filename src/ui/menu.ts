@@ -36,7 +36,7 @@ export function showMenu(initial: GameSettings, cb: MenuCallbacks): HTMLElement 
       <label>
         <span>Your color</span>
         <select name="yourcolor">
-          <option value="white">White (move first usually)</option>
+          <option value="white">White</option>
           <option value="black">Black</option>
         </select>
       </label>
@@ -50,10 +50,6 @@ export function showMenu(initial: GameSettings, cb: MenuCallbacks): HTMLElement 
         <span>Black's name</span>
         <input type="text" name="blackName" maxlength="20" />
       </label>
-      <label class="checkbox">
-        <input type="checkbox" name="hidePassAndPlay" />
-        <span>Hide board between turns (pass-and-play)</span>
-      </label>
     </div>
     <div class="row">
       <label>
@@ -66,10 +62,6 @@ export function showMenu(initial: GameSettings, cb: MenuCallbacks): HTMLElement 
           <option value="9">9 points</option>
           <option value="11">11 points</option>
         </select>
-      </label>
-      <label class="checkbox">
-        <input type="checkbox" name="tutor" />
-        <span>Tutor mode (rate my moves)</span>
       </label>
     </div>
     <div class="actions">
@@ -85,8 +77,6 @@ export function showMenu(initial: GameSettings, cb: MenuCallbacks): HTMLElement 
   const whiteName = modal.querySelector<HTMLInputElement>('input[name="whiteName"]')!;
   const blackName = modal.querySelector<HTMLInputElement>('input[name="blackName"]')!;
   const matchLen = modal.querySelector<HTMLSelectElement>('select[name="matchLength"]')!;
-  const tutorBox = modal.querySelector<HTMLInputElement>('input[name="tutor"]')!;
-  const hideBox = modal.querySelector<HTMLInputElement>('input[name="hidePassAndPlay"]')!;
 
   const bothHumanInitially = initial.whitePlayer === "human" && initial.blackPlayer === "human";
   opp.value = bothHumanInitially ? "human" : "cpu";
@@ -95,8 +85,6 @@ export function showMenu(initial: GameSettings, cb: MenuCallbacks): HTMLElement 
   whiteName.value = initial.whiteName;
   blackName.value = initial.blackName;
   matchLen.value = String(initial.matchLength);
-  tutorBox.checked = initial.tutorEnabled;
-  hideBox.checked = initial.hidePassAndPlay;
 
   const updateVis = (): void => {
     const isCpu = opp.value === "cpu";
@@ -125,8 +113,12 @@ export function showMenu(initial: GameSettings, cb: MenuCallbacks): HTMLElement 
       whiteName: isCpu ? (yourIsWhite ? "You" : "Computer") : whiteName.value || "White",
       blackName: isCpu ? (yourIsWhite ? "Computer" : "You") : blackName.value || "Black",
       cpuDifficulty: diff.value as Difficulty,
-      tutorEnabled: tutorBox.checked,
-      hidePassAndPlay: !isCpu && hideBox.checked,
+      // Tutor mode is now exclusively toggled in-game from the settings modal,
+      // so we preserve whatever was last saved here.
+      tutorEnabled: initial.tutorEnabled,
+      // Sticky in-game-only settings — preserved across game starts.
+      showPipCount: initial.showPipCount,
+      showEquity: initial.showEquity,
     };
     backdrop.remove();
     cb.onStart(settings);

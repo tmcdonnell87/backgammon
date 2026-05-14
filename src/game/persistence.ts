@@ -13,7 +13,8 @@ const DEFAULT_SETTINGS: GameSettings = {
   blackName: "Computer",
   cpuDifficulty: "casual",
   tutorEnabled: false,
-  hidePassAndPlay: false,
+  showPipCount: false,
+  showEquity: false,
 };
 
 export async function loadSettings(): Promise<GameSettings> {

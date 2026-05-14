@@ -13,6 +13,7 @@
   --checker-b-edge: #595963;
   --highlight: #ffd24a;
   --legal: #6dd47e;
+  --hint: #6ec9ff;
   --text: #e8e6e0;
   --text-dim: #9a958a;
   --accent: #ffb347;
@@ -37,11 +38,30 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* On phones (short viewport in landscape, or narrow in any orientation) a
+   CSS pixel is physically tiny because of high pixel density — 16px text
+   and 56-px-wide buttons end up uncomfortably small. Bumping the root
+   font-size scales every `rem`-based UI element (button icons, topbar
+   text, modal text) proportionally without touching the board SVG
+   (which uses its own viewBox). The sidebar also widens to keep tap
+   targets comfortable. */
+@media (max-height: 540px), (max-width: 700px) {
+  html {
+    font-size: 18px;
+  }
+}
+@media (max-height: 420px), (max-width: 500px) {
+  html {
+    font-size: 19px;
+  }
+}
+
 #app {
   display: flex;
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
+  overflow: hidden;
 }
 
 button {
@@ -78,7 +98,11 @@ button.primary:hover:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 1rem;
+  padding:
+    calc(0.5rem + env(safe-area-inset-top))
+    calc(1rem + env(safe-area-inset-right))
+    0.5rem
+    calc(1rem + env(safe-area-inset-left));
   background: var(--bg-2);
   border-bottom: 1px solid #2c2f38;
   flex: 0 0 auto;
@@ -92,46 +116,159 @@ button.primary:hover:not(:disabled) {
   color: var(--text-dim);
 }
 
+.main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  min-width: 0;
+}
+
 .board-wrap {
   flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem;
+  /* Keep the board off the device's left/bottom safe-area insets (notch /
+     home indicator) so checkers and tap targets stay reachable. The sidebar
+     owns the right inset. */
+  padding-left: env(safe-area-inset-left);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--board-edge);
   min-height: 0;
+  min-width: 0;
 }
 
 .board-svg {
   width: 100%;
   height: 100%;
-  max-width: 1100px;
   max-height: 100%;
+  touch-action: none;
 }
 
-.controls {
-  flex: 0 0 auto;
+.sidebar {
+  /* Grow the sidebar by safe-area-inset-right so the 56px-wide button column
+     stays clear of rounded corners / notches on full-screen phones in
+     landscape. Default vertical padding is minimal (just safe-area inset)
+     so the icons sit tight against the top/bottom of the column on
+     desktop. The landscape-phone media query below adds a 1.2rem floor
+     to keep corner buttons (undo, settings) clear of rounded screen
+     corners that the browser doesn't report via env(). */
+  flex: 0 0 calc(56px + env(safe-area-inset-right));
+  width: calc(56px + env(safe-area-inset-right));
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 1rem;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding:
+    calc(0.4rem + env(safe-area-inset-top))
+    calc(0.3rem + env(safe-area-inset-right))
+    calc(0.4rem + env(safe-area-inset-bottom))
+    0.3rem;
   background: var(--bg-2);
-  gap: 0.5rem;
-  border-top: 1px solid #2c2f38;
-  flex-wrap: wrap;
+  border-left: 1px solid #2c2f38;
+  overflow-y: auto;
 }
-.controls .left,
-.controls .right {
+.sidebar .tutor-slot {
+  min-height: 0;
+}
+.sidebar .actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.sidebar .actions-bottom {
+  margin-top: auto;
+}
+.sidebar .actions button {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  justify-content: center;
+  padding: 0.2em 0;
+  min-height: 44px;
+  line-height: 1;
 }
-.controls .turn-label {
+.sidebar .actions button .label {
+  display: none;
+}
+.sidebar .actions button .icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+/* Hint modal — anchor at the bottom and use a transparent backdrop so the
+   board (with preview arrows) is visible above. */
+.hint-modal-backdrop {
+  background: transparent;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 1rem 1rem;
+  pointer-events: none;
+}
+.hint-modal-backdrop .modal {
+  pointer-events: auto;
+  max-width: 480px;
+  background: rgba(35, 39, 48, 0.94);
+  backdrop-filter: blur(6px);
+}
+.hint-modal .hint-body {
+  margin: 0.5rem 0 1rem;
+  min-height: 3em;
+}
+.hint-table tr.hint-row.selected {
+  background: rgba(255, 210, 74, 0.18);
+  outline: 1px solid rgba(255, 210, 74, 0.55);
+}
+.hint-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.hint-table tr {
+  border-bottom: 1px solid #2c2f38;
+}
+.hint-table tr:last-child {
+  border-bottom: none;
+}
+.hint-table tr.hint-row {
+  cursor: pointer;
+  transition: background 100ms;
+}
+.hint-table tr.hint-row:hover {
+  background: #2b303b;
+}
+.hint-table td {
+  padding: 0.35rem 0.5rem;
+}
+.hint-table td.rank {
+  width: 1.5em;
   color: var(--text-dim);
-  font-size: 0.95rem;
+  text-align: right;
 }
-.controls .turn-label strong {
-  color: var(--text);
+.hint-table td.moves {
+  font-variant-numeric: tabular-nums;
+}
+.hint-table td.equity {
+  text-align: right;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding-right: 0.75rem;
+}
+.hint-table td.loss {
+  text-align: right;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hint-table tr.best td.loss {
+  color: var(--good);
+}
+
+.rotate-prompt {
+  display: none;
 }
 
 .modal-backdrop {
@@ -152,7 +289,11 @@ button.primary:hover:not(:disabled) {
   max-width: 480px;
   width: 100%;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
+}
+.modal-backdrop {
+  padding: 0.5rem;
 }
 .modal h2 {
   margin-top: 0;
@@ -189,44 +330,76 @@ button.primary:hover:not(:disabled) {
   gap: 0.5rem;
   margin-top: 1rem;
 }
-.pass-screen {
-  text-align: center;
-  padding: 2rem;
+/* Tutor analysis modal — centered (the analysis matters; pin attention) but
+   with a transparent backdrop so the pre-move board with arrows remains
+   visible behind it. */
+.tutor-modal-backdrop {
+  background: transparent;
+  pointer-events: none;
 }
-.pass-screen h2 {
-  font-size: 1.6rem;
-  margin: 0 0 1rem;
+.tutor-modal-backdrop .modal {
+  pointer-events: auto;
+  max-width: 480px;
+  background: rgba(35, 39, 48, 0.78);
+  backdrop-filter: blur(8px);
 }
-
-.tutor-card {
-  background: var(--bg-2);
-  border: 1px solid #353b48;
-  border-radius: 8px;
-  padding: 0.6rem 0.85rem;
-  font-size: 0.9rem;
-  color: var(--text-dim);
+.tutor-analysis-modal .tutor-head {
+  margin: 0 0 0.5rem;
 }
-.tutor-card .label {
-  font-weight: 600;
-  font-size: 0.85rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.tutor-card.good .label {
-  color: var(--good);
-}
-.tutor-card.doubtful .label {
-  color: #e6c44a;
-}
-.tutor-card.error .label {
+.tutor-analysis-modal.error .tutor-head {
   color: var(--accent);
 }
-.tutor-card.blunder .label {
+.tutor-analysis-modal.blunder .tutor-head {
   color: var(--danger);
 }
-.tutor-card .detail {
-  margin-top: 0.25rem;
-  color: var(--text);
+/* Highlight the user's row by classification: yellow for error, red for
+   blunder. Selected/hover states layer additional darkening on top. */
+.tutor-analysis-modal.error .hint-table tr.hint-row.yours {
+  background: rgba(244, 208, 63, 0.30);
+}
+.tutor-analysis-modal.error .hint-table tr.hint-row.yours.selected {
+  background: rgba(244, 208, 63, 0.45);
+  outline-color: rgba(244, 208, 63, 0.75);
+}
+.tutor-analysis-modal.blunder .hint-table tr.hint-row.yours {
+  background: rgba(231, 76, 60, 0.32);
+}
+.tutor-analysis-modal.blunder .hint-table tr.hint-row.yours.selected {
+  background: rgba(231, 76, 60, 0.48);
+  outline-color: rgba(231, 76, 60, 0.80);
+}
+.hint-table tr.hint-row.yours {
+  background: rgba(255, 126, 126, 0.10);
+}
+.hint-table tr.hint-row.yours.selected {
+  background: rgba(255, 210, 74, 0.18);
+}
+
+/* Compact tutor flag chip — fits inside the 56-px sidebar. Hover for full
+   classification + best-move detail via the title tooltip. */
+.tutor-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0.2rem auto 0;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: help;
+  color: #1a1d24;
+}
+.tutor-chip.doubtful {
+  background: #e6c44a;
+}
+.tutor-chip.error {
+  background: var(--accent);
+}
+.tutor-chip.blunder {
+  background: var(--danger);
+  color: #fff;
 }
 
 .report {
@@ -244,11 +417,116 @@ button.primary:hover:not(:disabled) {
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 600px) {
-  .controls {
+/* Compact landscape (phones held landscape): drop the topbar to give the
+   board the full window height, and widen the sidebar so the larger
+   icons (from the bumped root font-size) sit comfortably. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .topbar {
+    display: none;
+  }
+  .sidebar {
+    flex: 0 0 calc(64px + env(safe-area-inset-right));
+    width: calc(64px + env(safe-area-inset-right));
+    /* Floor vertical padding at 1.2rem so the top/bottom buttons stay
+       clear of the device's rounded screen corners, which can eat into
+       the sidebar's corners even when env(safe-area-inset-top/bottom)
+       reports 0 in landscape. */
+    padding:
+      max(1.2rem, calc(0.4rem + env(safe-area-inset-top)))
+      calc(0.3rem + env(safe-area-inset-right))
+      max(1.2rem, calc(0.4rem + env(safe-area-inset-bottom)))
+      0.3rem;
+  }
+}
+@media (orientation: landscape) and (max-height: 420px) {
+  .sidebar {
+    flex: 0 0 calc(70px + env(safe-area-inset-right));
+    width: calc(70px + env(safe-area-inset-right));
+  }
+}
+
+/* Compact viewports: shrink modal padding/spacing so the menu fits a phone. */
+@media (max-width: 540px), (max-height: 540px) {
+  .modal {
+    padding: 0.7rem 0.85rem;
+    border-radius: 10px;
     font-size: 0.9rem;
   }
-  button {
-    padding: 0.5em 0.85em;
+  .modal h2 {
+    font-size: 1.05rem;
+    margin-bottom: 0.4rem;
   }
+  .modal label {
+    margin-bottom: 0.35rem;
+    font-size: 0.85rem;
+  }
+  .modal label > span {
+    margin-bottom: 0.1rem;
+  }
+  .modal select,
+  .modal input[type="text"],
+  .modal input[type="number"] {
+    padding: 0.25em 0.45em;
+    font-size: 0.92rem;
+  }
+  .modal .actions {
+    margin-top: 0.45rem;
+  }
+  .modal .actions button {
+    padding: 0.35em 0.75em;
+    font-size: 0.9rem;
+  }
+}
+
+/* Landscape phone: lay rows side-by-side and widen the modal so all the
+   controls fit without scrolling. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .modal {
+    max-width: 640px;
+  }
+  .modal .row {
+    display: flex;
+    gap: 0.6rem;
+  }
+  .modal .row > label {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .modal .row > label.checkbox {
+    flex: 0 1 auto;
+    align-self: end;
+  }
+}
+
+/* Portrait on small/medium screens: ask the user to rotate. */
+@media (orientation: portrait) and (max-width: 900px) {
+  .topbar,
+  .main {
+    display: none;
+  }
+  .rotate-prompt {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2rem;
+    text-align: center;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1.1rem;
+    z-index: 200;
+  }
+  .rotate-prompt .rotate-icon {
+    font-size: 3rem;
+    color: var(--accent);
+    animation: rotate-hint 2s ease-in-out infinite;
+  }
+}
+
+@keyframes rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(90deg); }
 }

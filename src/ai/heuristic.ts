@@ -117,16 +117,19 @@ function sidedScore(p: Position): number {
   return s;
 }
 
-function stillInContact(p: Position): boolean {
+// Contact iff our highest piece is at or above their lowest piece: from
+// there we could move backward across them, or they could move forward into
+// us. Race iff oursMax < oppsMin. (See training/race_filter.py for derivation.)
+export function stillInContact(p: Position): boolean {
   if (p.barUs > 0 || p.barThem > 0) return true;
-  let oursMin = POINTS;
-  let oppsMax = -1;
+  let oursMax = -1;
+  let oppsMin = POINTS;
   for (let i = 0; i < POINTS; i++) {
-    if (p.points[i] > 0 && i < oursMin) oursMin = i;
-    if (p.points[i] < 0 && i > oppsMax) oppsMax = i;
+    if (p.points[i] > 0 && i > oursMax) oursMax = i;
+    if (p.points[i] < 0 && i < oppsMin) oppsMin = i;
   }
-  if (oursMin === POINTS || oppsMax === -1) return false;
-  return oursMin <= oppsMax;
+  if (oursMax === -1 || oppsMin === POINTS) return false;
+  return oursMax >= oppsMin;
 }
 
 function blotShotProbability(p: Position, i: number): number {

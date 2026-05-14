@@ -1,4 +1,4 @@
-import { Position, mirror } from "../engine/position";
+import { Position, mirror, hashPosition } from "../engine/position";
 import { Play, applyPlay, generatePlays } from "../engine/moves";
 import { checkWin } from "../engine/rules";
 import { Evaluator } from "./evaluator";
@@ -6,6 +6,20 @@ import { Evaluator } from "./evaluator";
 export interface ScoredPlay {
   play: Play;
   equity: number;
+}
+
+// Deduplicate plays by final position. Equivalent orderings (same final state,
+// different sub-move sequence) collapse to one representative, since the AI
+// scores positions, not orderings. The UI keeps the un-deduped list so the
+// player can still play either order.
+function dedupePlaysByFinal(p: Position, plays: Play[]): Play[] {
+  const seen = new Map<string, Play>();
+  for (const play of plays) {
+    const after = applyPlay(p, play);
+    const h = hashPosition(after);
+    if (!seen.has(h)) seen.set(h, play);
+  }
+  return [...seen.values()];
 }
 
 // Evaluate a terminal position (after a play). Returns equity in "us" perspective.
@@ -39,7 +53,7 @@ export function score0ply(p: Position, plays: Play[], ev: Evaluator): ScoredPlay
   return out;
 }
 
-const ALL_ROLLS: ReadonlyArray<readonly [number, number, number]> = (() => {
+export const ALL_ROLLS: ReadonlyArray<readonly [number, number, number]> = (() => {
   const rolls: [number, number, number][] = [];
   for (let i = 1; i <= 6; i++) {
     for (let j = i; j <= 6; j++) {
@@ -65,7 +79,9 @@ export function score2ply(p: Position, plays: Play[], ev: Evaluator): ScoredPlay
     const oppView = mirror(after);
     let total = 0;
     for (const [d1, d2, prob] of ALL_ROLLS) {
-      const oppPlays = generatePlays(oppView, d1, d2);
+      // Opp's legalPlays is also un-deduped (UI semantics). Dedupe by final
+      // here — the inner search only cares about reachable positions.
+      const oppPlays = dedupePlaysByFinal(oppView, generatePlays(oppView, d1, d2));
       // Opponent picks play that maximizes their equity (= bad for us)
       let bestOpp = -Infinity;
       for (const oplay of oppPlays) {
@@ -89,6 +105,9 @@ export function score2ply(p: Position, plays: Play[], ev: Evaluator): ScoredPlay
 
 // Rank plays at the requested ply. With noise, perturbs the equities and
 // optionally returns top-K candidates as if the AI hesitated.
+//
+// We dedupe by final position before scoring — equivalent orderings cost the
+// AI nothing extra. Returns one ScoredPlay per unique final.
 export function rankPlays(
   p: Position,
   plays: Play[],
@@ -98,7 +117,8 @@ export function rankPlays(
   if (plays.length === 0 || (plays.length === 1 && plays[0].length === 0)) {
     return [{ play: plays[0] ?? [], equity: 0 }];
   }
-  const scored = plies === 2 ? score2ply(p, plays, ev) : score0ply(p, plays, ev);
+  const unique = dedupePlaysByFinal(p, plays);
+  const scored = plies === 2 ? score2ply(p, unique, ev) : score0ply(p, unique, ev);
   scored.sort((a, b) => b.equity - a.equity);
   return scored;
 }

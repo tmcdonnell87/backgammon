@@ -100,20 +100,22 @@ describe("generatePlays", () => {
     expect(Math.max(...lens)).toBe(4);
   });
 
-  it("dedupes by final board state", () => {
-    // 5-3 with checkers on the 8-point only: 8/3, 8/5/-> wait
+  it("keeps every distinct sub-move sequence (no final-position dedup)", () => {
+    // 5-3 with checkers on the 8-point only. Plays like (8/3, 8/5) and
+    // (8/5, 8/3) reach the same final but differ in sub-move ordering. Both
+    // must be kept so the UI can play either order.
     const p = emptyBoard();
     p.points[7] = 4; // our 8-point
     const plays = generatePlays(p, 5, 3);
-    // Two orderings of (8/3, 8/5) end at the same final board; should dedupe to one.
-    // But also 8/5, 5/2 is a different final, etc.
-    const finals = new Set(
-      plays.map((pl) => {
-        const np = applyPlay(p, pl);
-        return Array.from(np.points).join(",");
-      }),
+    const keys = new Set(
+      plays.map((pl) => pl.map((s) => `${s.from},${s.to},${s.die}`).join("|")),
     );
-    expect(finals.size).toBe(plays.length);
+    expect(keys.size).toBe(plays.length);
+    // And both orderings should be present.
+    const hasFirstThree = plays.some((pl) => pl[0]?.die === 3);
+    const hasFirstFive = plays.some((pl) => pl[0]?.die === 5);
+    expect(hasFirstThree).toBe(true);
+    expect(hasFirstFive).toBe(true);
   });
 
   it("must use larger die when both can be used singly but not together", () => {

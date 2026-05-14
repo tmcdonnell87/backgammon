@@ -5,7 +5,6 @@ import {
   Position,
   allHome,
   clonePosition,
-  hashPosition,
 } from "./position";
 
 export interface SubMove {
@@ -102,7 +101,13 @@ function explore(p: Position, remaining: number[], partial: Play, out: Found[]):
 // Enforces:
 //   * use as many dice as possible
 //   * if exactly one die can be used and dice differ, must use the larger if possible
-//   * deduplication by resulting board state
+//   * keeps every distinct full sub-move sequence — no dedup by final position.
+//     This is essential for the UI: when two orderings reach the same final
+//     but differ at ANY sub-move position, the user must be able to play
+//     either one (e.g., doubles 5-5 with [19→14, 19→14, …] vs [19→14, 14→9, …]
+//     reaching the same final — the user wants to tap 19 twice). Identical
+//     sub-move sequences are still deduped (can't happen for non-doubles
+//     since each ordering yields a unique first-die-value).
 // Returns [[]] (a single empty play) if no dice can be used at all.
 export function generatePlays(p: Position, d1: number, d2: number): Play[] {
   const orderings: number[][] = d1 === d2 ? [[d1, d1, d1, d1]] : [[d1, d2], [d2, d1]];
@@ -122,10 +127,13 @@ export function generatePlays(p: Position, d1: number, d2: number): Play[] {
     if (usingLarger.length > 0) candidates = usingLarger;
   }
 
+  // Dedup only by full sub-move sequence (identical plays). Two plays that
+  // share the same final but reach it via different sub-move orderings are
+  // both kept so the UI can let the user tap any legal continuation.
   const seen = new Map<string, Play>();
   for (const c of candidates) {
-    const h = hashPosition(c.pos);
-    if (!seen.has(h)) seen.set(h, c.play);
+    const key = c.play.map((s) => `${s.from},${s.to},${s.die}`).join("|");
+    if (!seen.has(key)) seen.set(key, c.play);
   }
   return [...seen.values()];
 }

@@ -17,9 +17,8 @@
     "allowImportingTsExtensions": false,
     "verbatimModuleSyntax": false,
     "types": ["vite/client"],
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src", "test", "scripts", "vite.config.ts", "vitest.config.ts"]

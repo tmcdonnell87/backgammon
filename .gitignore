@@ -11,3 +11,6 @@ training/__pycache__/
 __pycache__/
 *.bundle
 training/_*
+
+.venv/
+.claude/

@@ -4,20 +4,26 @@ import { OFF, BAR } from "../engine/position";
 
 export function renderTutorCard(parent: HTMLElement, entry: TutorEntry | undefined): void {
   parent.innerHTML = "";
-  if (!entry) return;
-  const card = document.createElement("div");
-  card.className = `tutor-card ${entry.classification}`;
-  const label = document.createElement("div");
-  label.className = "label";
-  label.textContent = labelFor(entry.classification, entry.equityLoss);
-  card.appendChild(label);
-  if (entry.classification !== "good") {
-    const detail = document.createElement("div");
-    detail.className = "detail";
-    detail.textContent = `Best: ${describePlay(entry.bestPlay)}`;
-    card.appendChild(detail);
+  // No card for good moves — the absence of a flag is itself the feedback.
+  if (!entry || entry.classification === "good") return;
+  const chip = document.createElement("div");
+  chip.className = `tutor-chip ${entry.classification}`;
+  chip.textContent = initialFor(entry.classification);
+  chip.title = `${labelFor(entry.classification, entry.equityLoss)} — Best: ${describePlay(entry.bestPlay)}`;
+  parent.appendChild(chip);
+}
+
+function initialFor(c: TutorEntry["classification"]): string {
+  switch (c) {
+    case "good":
+      return "G";
+    case "doubtful":
+      return "?";
+    case "error":
+      return "!";
+    case "blunder":
+      return "‼";
   }
-  parent.appendChild(card);
 }
 
 function labelFor(c: TutorEntry["classification"], loss: number): string {
@@ -65,7 +71,7 @@ export function renderPostGameReport(parent: HTMLElement, history: TutorEntry[],
     const name = side === 0 ? whiteName : blackName;
     const pr = t.moves > 0 ? (t.loss / t.moves) * 500 : 0;
     const h = document.createElement("h3");
-    h.textContent = `${name} — PR ${pr.toFixed(1)}`;
+    h.textContent = `${name} — PR ${pr.toFixed(1)} (${prTier(pr)})`;
     wrap.appendChild(h);
     const tbl = document.createElement("table");
     tbl.innerHTML = `
@@ -81,4 +87,15 @@ export function renderPostGameReport(parent: HTMLElement, history: TutorEntry[],
     wrap.appendChild(tbl);
   }
   parent.appendChild(wrap);
+}
+
+// Standard backgammon performance rating tiers (XG / Backgammon Galaxy).
+// PR is millipoints-per-game equity loss — lower is better.
+function prTier(pr: number): string {
+  if (pr < 2) return "World class";
+  if (pr < 4) return "Expert";
+  if (pr < 7) return "Advanced";
+  if (pr < 12) return "Intermediate";
+  if (pr < 20) return "Casual";
+  return "Beginner";
 }

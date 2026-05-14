@@ -44,6 +44,41 @@ describe("pickMove", () => {
     const after = applyPlay(p, chosen);
     expect(after.points[4]).toBe(2); // 5-point is made
   });
+
+  it("opening 4-2 prefers making the 4-point", () => {
+    // The standard "best" 4-2 play is 8/4, 6/4, making the 4-point.
+    const p = startingPosition();
+    const plays = generatePlays(p, 4, 2);
+    const chosen = pickMove(p, plays, "expert");
+    const after = applyPlay(p, chosen);
+    expect(after.points[3]).toBe(2); // 4-point is made
+  });
+
+  it("end-game race: bear off when all checkers are home", () => {
+    // Construct a pure race position: 2 checkers on each of points 1..5,
+    // 5 already off, opponent similarly. Dice 6-5 should bear off both
+    // back checkers (since 6 = bear-off from any point in home, 5 = bear-off
+    // from the 5-point).
+    const p = startingPosition();
+    for (let i = 0; i < 24; i++) p.points[i] = 0;
+    p.points[0] = 2;
+    p.points[1] = 2;
+    p.points[2] = 2;
+    p.points[3] = 2;
+    p.points[4] = 2;
+    p.offUs = 5;
+    p.points[23] = -2;
+    p.points[22] = -2;
+    p.points[21] = -2;
+    p.points[20] = -2;
+    p.points[19] = -2;
+    p.offThem = 5;
+    const plays = generatePlays(p, 6, 5);
+    const chosen = pickMove(p, plays, "expert");
+    const after = applyPlay(p, chosen);
+    // Both dice should be used to bear off (offUs increases by 2).
+    expect(after.offUs).toBe(7);
+  });
 });
 
 describe("analyzeMove", () => {

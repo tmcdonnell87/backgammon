@@ -1,71 +1,82 @@
-"""TD(λ) self-play trainer for backgammon.
+"""TD(λ) self-play trainer for backgammon, 4-output edition.
 
 Both players use the same network. Each move:
   1. Generate legal plays for the current dice.
   2. For each candidate, evaluate the resulting position from the *opponent's*
-     perspective (mirror after applying play). The score "we keep this play if
-     it minimizes their winning probability" -> pick play with lowest opp-y.
+     perspective (mirror after applying play). Pick the play that maximizes
+     our cubeless equity (= -opp equity).
   3. Apply the chosen play, mirror, roll new dice. Repeat.
-  4. After each move, run a TD(λ) update: previous y vs current y from the
-     mover's perspective. Because perspective flips between moves, we negate
-     across mirroring.
+  4. After each move, run a TD(λ) update with a 4-head sigmoid target
+     (p_win, p_gammon_win, p_loss, p_gammon_loss). Perspective flips between
+     plies; the head vector permutes by SWAP_WL when crossing a mirror.
 
-We run on a single thread; numpy keeps it fast enough (~10-20 games/sec
-on CPU at H=80).
+Single-thread torch CPU here; Phase B introduces multiprocessing in
+parallel_train.py. CLI:
 
-CLI:
    python3 train.py --games 10000 --out runs/run1
-will write checkpoints to runs/run1/ckpt-{N}.npz and weights-{N}.json,
-plus runs/run1/log.csv.
+
+writes runs/run1/weights-{N}.json + weights-latest.json + log.csv.
 """
 from __future__ import annotations
 import argparse
 import csv
-import json
 import os
 import random
 import signal
-import sys
 import time
 from typing import Optional
 
-import numpy as np
+import torch
 
 from engine import (
-    Position, starting_position, generate_plays, apply_play, mirror,
-    check_win,
+    Position, starting_position, generate_plays, mirror, check_win,
 )
 from encoding import encode
-from net import Net, save_npz, load_npz
+from net_torch import Net, equity_from_probs, P_W, P_GW, P_L, P_GL
+from outcome import classify_outcome
+from race_filter import still_in_contact, is_race
+from rollout import rollout_target_4vec_us_frame
 
 
-# Hyperparameters. With our 1-output sigmoid + eligibility traces, alpha=0.1
-# diverges (weight norms blow up after ~5k games of self-play). 0.03 with
-# lambda=0.5 trains stably; the effective per-trace step is alpha/(1-lambda)
-# which we want < ~0.1.
-ALPHA = 0.03
+# Hyperparameters. The 4-output head shares the trunk (W1, b1) across all
+# heads, so the W1 update is the sum of 4 per-head gradients each weighted by
+# its own TD error. Effective step on shared params is ~4× the scalar case;
+# 0.03 (which worked for the legacy single-output net) diverges here. 0.01
+# with λ=0.5 trains stably. Per-trace effective step α/(1−λ) stays < ~0.05.
+ALPHA = 0.01
 LAMBDA = 0.5
 GAMMA = 1.0           # episodic, no discount inside a game
 
+# Permutation that converts a 4-head value vector from one perspective to the
+# opposite perspective: swap W with L heads. (p_w, p_gw, p_l, p_gl) viewed
+# from the other player becomes (p_l, p_gl, p_w, p_gw).
+SWAP_WL = [P_L, P_GL, P_W, P_GW]
+
+
+def _swap_wl(v: torch.Tensor) -> torch.Tensor:
+    return v[SWAP_WL]
+
 
 def _argmax_play(p: Position, plays, net: Net) -> int:
-    """Return index of play that minimizes opponent's winning probability
-    (i.e. best for us)."""
+    """Return index of the play that maximizes our cubeless equity."""
     if len(plays) == 1:
         return 0
     best_i = 0
-    best_score = -1.0
+    best_score = -float("inf")
     for i, (_play, after) in enumerate(plays):
         win = check_win(after)
         if win is not None:
-            # Terminal after our play. Winner is p.turn (us). Score = 1 (we win).
-            us_y = 1.0
+            # Terminal after our play => we won (we can only push our own
+            # checkers off). base_points = 1/2/3 already encodes gammon.
+            _winner_abs, base_pts = win
+            us_eq = float(base_pts)
         else:
             opp_view = mirror(after)
-            opp_y = net.value(encode(opp_view))
-            us_y = 1.0 - opp_y
-        if us_y > best_score:
-            best_score = us_y
+            y_opp, _h, _x = net.forward(encode(opp_view))
+            # Equity in opp frame is opp's equity; ours is the negation.
+            us_eq = -float(equity_from_probs(y_opp).item())
+        if us_eq > best_score:
+            best_score = us_eq
             best_i = i
     return best_i
 
@@ -74,34 +85,81 @@ def _roll(rng: random.Random):
     return rng.randint(1, 6), rng.randint(1, 6)
 
 
+def _phase_matches_input(prev_was_contact: Optional[bool], mode: str) -> bool:
+    """Should this ply's TD update fire?
+
+    Phase is the phase of the INPUT to the model (= prev_x's underlying state
+    = the position at the start of this ply). In contact mode we only update
+    the contact net on contact inputs; in race mode only on race inputs.
+    For boundary plies where the input was contact but `after` is race, the
+    contact net still updates — its target uses the frozen race net's value
+    (the cross-net bootstrap) when one is provided.
+    """
+    if prev_was_contact is None:
+        return False
+    if mode == "all":
+        return True
+    if mode == "contact":
+        return prev_was_contact
+    if mode == "race":
+        return not prev_was_contact
+    raise ValueError(f"unknown mode: {mode}")
+
+
 def play_game(net: Net, alpha: float, lam: float, rng: random.Random,
-              learn: bool = True) -> dict:
+              learn: bool = True, mode: str = "all",
+              rollout_fraction: float = 0.0,
+              bootstrap_net: Optional[Net] = None) -> dict:
     """Play one self-play game, doing TD(λ) updates if learn=True.
 
-    Returns stats dict.
+    All TD bookkeeping uses 4-head value vectors. `prev_y` is always stored
+    in the *new mover's* frame so that subsequent steps' values (also in
+    new mover frame) can be subtracted directly. Crossing a mirror swaps
+    W↔L heads (SWAP_WL).
+
+    `mode` selects which plies trigger TD updates:
+      * "all"     — update every ply (Phase A/B default).
+      * "contact" — update only on plies whose INPUT (prev_x) is contact.
+                    Targets at the contact↔race boundary come from
+                    `bootstrap_net` when one is provided (Phase F cross-net
+                    bootstrap); otherwise from `net` itself.
+      * "race"    — update only on plies whose INPUT (prev_x) is race.
+
+    `bootstrap_net`: optional frozen forward-only Net (no traces, no
+    gradient). When provided AND mode=='contact' AND `after` is a race
+    position, the TD target for that ply uses `bootstrap_net`'s value
+    instead of `net`'s. Used by Phase F to train the contact net against
+    the race specialist net's evaluation at boundary states.
+
+    `rollout_fraction` ∈ [0, 1]: per ply, with this probability replace the
+    0-ply TD bootstrap target (swap_wl(y_opp)) with a 2-ply expectimax
+    rollout target. Cost ~20x per affected ply; keep small (0.05–0.10).
+    Phase D.
     """
     p = starting_position()
     # Opening roll: re-roll doubles.
     d1, d2 = _roll(rng)
     while d1 == d2:
         d1, d2 = _roll(rng)
-    if d1 < d2:  # convention: bigger goes first; doesn't really matter, we just play
+    if d1 < d2:  # convention: bigger goes first; doesn't really matter
         d1, d2 = d2, d1
 
     if learn:
         net.reset_traces()
 
-    # State_t for TD update: (x_t, h_t, y_t) of the mover whose move just produced it.
-    # On first move there's no previous state.
+    # State_t for TD update: previous mover's frame value cache.
     prev_x = None
     prev_h = None
-    prev_y = None
-    prev_sign = 1   # +1 if prev_y is from current mover's view; flips on mirror
+    prev_y = None  # 4-vector in (about-to-move) mover's frame.
+    # Phase of the position at the start of the CURRENT ply (= prev_x's
+    # underlying state). Used to decide whether to fire the TD update under
+    # `mode`. Stays in sync with `p`: still_in_contact(p) at any iteration's
+    # head, since mirroring doesn't change phase.
+    prev_was_contact: Optional[bool] = None
 
     plies = 0
     winner = None  # absolute side winner
     base_pts = 1
-    first_perspective = 0  # us at start = side 0
 
     while True:
         plies += 1
@@ -118,49 +176,60 @@ def play_game(net: Net, alpha: float, lam: float, rng: random.Random,
         win = check_win(after)
         if win is not None:
             winner_abs, base_pts = win
-            # Map to "first_perspective" frame: did first_perspective win?
-            # Mover at this turn: depends on how many flips. We don't track
-            # absolute turn; just use win_abs vs first_perspective.
             winner = winner_abs
-            # TD update: target = 1 if mover wins, 0 if loses.
-            # `after` is from mover's perspective (haven't mirrored yet).
-            # winner_abs == p.turn means mover wins => target = 1 from mover view.
-            mover_target = 1.0 if winner_abs == p.turn else 0.0
-            if learn and prev_x is not None:
-                # prev_y was from prev_mover view. Current mover view value = mover_target.
-                # If perspective flipped (prev_sign = -1), then in prev_mover frame
-                # current value = 1 - mover_target.
-                cur_in_prev_frame = mover_target if prev_sign == 1 else 1.0 - mover_target
-                td_err = cur_in_prev_frame - prev_y
+            # `after` is from p.turn's frame; p.turn just played and (since we
+            # can only push our own checkers off) is the winner. prev_y was
+            # cached in the new-mover frame, which is exactly p.turn (we
+            # haven't mirrored yet this iter). So the terminal target is in
+            # the same frame as prev_y — no swap.
+            target = torch.tensor(
+                classify_outcome(after, p.turn), dtype=torch.float32
+            )
+            if (learn and prev_x is not None
+                    and _phase_matches_input(prev_was_contact, mode)):
+                td_err = target - prev_y
                 net.td_step(prev_x, prev_y, prev_h, td_err, alpha, lam)
             break
 
-        # Non-terminal: get y_t for current mover at `after` BEFORE mirroring.
-        # That value = "mover's win probability after their play" = 1 - opp_view_y.
+        # Non-terminal: evaluate at opp view (i.e. from the next mover's
+        # perspective). The cached prev_y is in *this* iteration's mover
+        # frame (i.e. p.turn). Crossing the mirror swaps W↔L heads, so
+        # cur-in-prev-frame = swap_wl(y_opp).
         opp_view = mirror(after)
-        x_opp, = (encode(opp_view),)
-        y_opp, h_opp, _ = net.forward(x_opp)
-        # "mover view value" = 1 - y_opp; but for TD, easier to use opp-view value
-        # consistently. We use mover-view: y_t_mover = 1 - y_opp.
-        # However eligibility traces need grad of y_t we used. We'll do TD in
-        # opponent-frame because that's what we have h for: define value as
-        # P(current-to-move wins) and compute traces at the *new* mover (the opp).
-        # Simpler: we run TD in the about-to-move perspective each step.
+        x_opp = encode(opp_view)
+        y_opp, h_opp, x_opp_t = net.forward(x_opp)
 
-        # Switch to next mover frame.
-        if learn and prev_x is not None:
-            # cur value in prev mover frame:
-            #   y_opp is value for the NEW mover (opp) of "opp wins"
-            #   In prev mover frame (which IS the opp's opp), the prev mover's
-            #   win prob equals 1 - y_opp.
-            cur_in_prev_frame = 1.0 - y_opp
+        if (learn and prev_x is not None
+                and _phase_matches_input(prev_was_contact, mode)):
+            # Cross-net bootstrap: when training the contact net AND the
+            # position after our play has crossed into the race phase, use
+            # the frozen race net's evaluation as the target (boundary ply).
+            use_bootstrap = (
+                bootstrap_net is not None
+                and mode == "contact"
+                and is_race(after)
+            )
+            if use_bootstrap:
+                # Forward-only; no traces, no gradient.
+                with torch.no_grad():
+                    y_boot, _h_b, _x_b = bootstrap_net.forward(x_opp)
+                cur_in_prev_frame = _swap_wl(y_boot)
+            elif rollout_fraction > 0.0 and rng.random() < rollout_fraction:
+                # 2-ply expectimax target in prev-mover (= mover_k) frame.
+                cur_in_prev_frame = rollout_target_4vec_us_frame(net, after)
+            else:
+                cur_in_prev_frame = _swap_wl(y_opp)
             td_err = cur_in_prev_frame - prev_y
             net.td_step(prev_x, prev_y, prev_h, td_err, alpha, lam)
 
         # Set prev to (x_opp, h_opp, y_opp) — this is the new mover's frame.
-        prev_x = x_opp
+        prev_x = x_opp_t
         prev_h = h_opp
         prev_y = y_opp
+        # `after` and `opp_view` share phase (mirror invariant); both are
+        # the start of the NEXT ply. Cache that phase for the next iter's
+        # TD-update gate.
+        prev_was_contact = still_in_contact(after)
         # Flip perspective.
         p = opp_view
         d1, d2 = _roll(rng)
@@ -174,14 +243,15 @@ def play_game(net: Net, alpha: float, lam: float, rng: random.Random,
 
 def run_training(out_dir: str, games: int, ckpt_every: int,
                  alpha: float = ALPHA, lam: float = LAMBDA,
-                 hidden: int = 80, seed: int = 1, resume: Optional[str] = None):
+                 hidden=120, seed: int = 1, resume: Optional[str] = None):
     os.makedirs(out_dir, exist_ok=True)
     if resume and os.path.exists(resume):
-        net = load_npz(resume)
-        print(f"resumed from {resume} (hidden={net.hidden})", flush=True)
+        net = Net.load_json(resume)
+        print(f"resumed from {resume} (hidden_layers={net.hidden_layers})",
+              flush=True)
     else:
         net = Net(hidden=hidden, seed=seed)
-        print(f"fresh net hidden={hidden}", flush=True)
+        print(f"fresh net hidden_layers={net.hidden_layers}", flush=True)
 
     rng = random.Random(seed)
 
@@ -231,24 +301,19 @@ def run_training(out_dir: str, games: int, ckpt_every: int,
             log.writerow([g, f"{avg_plies:.2f}", f"{wr:.3f}", f"{elapsed:.1f}"])
 
         if g % ckpt_every == 0:
-            ckpt = os.path.join(out_dir, f"ckpt-{g}.npz")
             jpath = os.path.join(out_dir, f"weights-{g}.json")
-            save_npz(net, ckpt)
             net.save_json(jpath)
-            # also publish as latest
             net.save_json(os.path.join(out_dir, "weights-latest.json"))
-            print(f"checkpoint games={g} -> {ckpt}, {jpath}", flush=True)
+            print(f"checkpoint games={g} -> {jpath}", flush=True)
 
         if stop["requested"]:
             break
 
     # Final checkpoint.
-    ckpt = os.path.join(out_dir, f"ckpt-final.npz")
     jpath = os.path.join(out_dir, f"weights-final.json")
-    save_npz(net, ckpt)
     net.save_json(jpath)
     net.save_json(os.path.join(out_dir, "weights-latest.json"))
-    print(f"FINAL games={g} -> {ckpt}, {jpath}", flush=True)
+    print(f"FINAL games={g} -> {jpath}", flush=True)
     log_f.close()
 
 
@@ -259,12 +324,17 @@ def main():
     ap.add_argument("--ckpt-every", type=int, default=1000)
     ap.add_argument("--alpha", type=float, default=ALPHA)
     ap.add_argument("--lambda", dest="lam", type=float, default=LAMBDA)
-    ap.add_argument("--hidden", type=int, default=80)
+    ap.add_argument("--hidden", default="120",
+                    help="int or comma list like '200,200' (multi-layer)")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--resume", default=None)
     args = ap.parse_args()
+    if "," in args.hidden:
+        hidden = [int(s) for s in args.hidden.split(",") if s]
+    else:
+        hidden = int(args.hidden)
     run_training(args.out, args.games, args.ckpt_every,
-                 alpha=args.alpha, lam=args.lam, hidden=args.hidden,
+                 alpha=args.alpha, lam=args.lam, hidden=hidden,
                  seed=args.seed, resume=args.resume)
 
 

@@ -11,14 +11,12 @@ import random
 import time
 from typing import Callable
 
-import numpy as np
-
 from engine import (
     Position, starting_position, mirror, generate_plays, check_win, POINTS,
     pip_count, pip_count_them,
 )
 from encoding import encode
-from net import Net
+from match_nets import load_net_auto
 
 
 # --- Heuristic port (kept faithful to src/ai/heuristic.ts) ---------------
@@ -43,18 +41,21 @@ W_HIT_OPP_BLOT = 0.05
 
 
 def _still_in_contact(p: Position) -> bool:
+    # See training/race_filter.py for derivation; contact iff our highest
+    # piece is at or above their lowest piece (we could move backward across
+    # them, or vice versa).
     if p.bar_us > 0 or p.bar_them > 0:
         return True
-    ours_min = POINTS
-    opps_max = -1
+    ours_max = -1
+    opps_min = POINTS
     for i in range(POINTS):
-        if p.points[i] > 0 and i < ours_min:
-            ours_min = i
-        if p.points[i] < 0 and i > opps_max:
-            opps_max = i
-    if ours_min == POINTS or opps_max == -1:
+        if p.points[i] > 0 and i > ours_max:
+            ours_max = i
+        if p.points[i] < 0 and i < opps_min:
+            opps_min = i
+    if ours_max == -1 or opps_min == POINTS:
         return False
-    return ours_min <= opps_max
+    return ours_max >= opps_min
 
 
 def _shots_to_prob(needed):
@@ -182,14 +183,14 @@ def pick_with(p: Position, plays, score_fn_after_play) -> int:
     return best_i
 
 
-def play_one_game(net_side: int, net: Net, rng: random.Random) -> int:
-    """Returns 1 if the side that started as net_side won, else 0."""
+def play_one_game(net_side: int, net_equity_fn, rng: random.Random) -> int:
+    """net_equity_fn(pos) -> cubeless equity from pos's perspective. Returns
+    1 if the side that started as net_side won, else 0."""
     p = starting_position()
     d1, d2 = rng.randint(1, 6), rng.randint(1, 6)
     while d1 == d2:
         d1, d2 = rng.randint(1, 6), rng.randint(1, 6)
 
-    # turn 0 means net_side is on roll
     turn_is_net = (net_side == 0)
     while True:
         plays = generate_plays(p, d1, d2)
@@ -197,9 +198,7 @@ def play_one_game(net_side: int, net: Net, rng: random.Random) -> int:
             after = p
         else:
             if turn_is_net:
-                # net evaluates from "us" perspective via 1-2y mapping.
-                idx = pick_with(p, plays,
-                                lambda pos: 2 * net.value(encode(pos)) - 1)
+                idx = pick_with(p, plays, net_equity_fn)
             else:
                 idx = pick_with(p, plays, heuristic_value)
             _play, after = plays[idx]
@@ -221,7 +220,7 @@ def main():
     ap.add_argument("--seed", type=int, default=12345)
     args = ap.parse_args()
 
-    net = Net.load_json(args.weights)
+    _net, net_eq = load_net_auto(args.weights)
     rng = random.Random(args.seed)
     n = args.games
     wins = 0
@@ -229,7 +228,7 @@ def main():
     for g in range(n):
         # Alternate which side is the net to remove first-mover bias.
         net_side = g & 1
-        wins += play_one_game(net_side, net, rng)
+        wins += play_one_game(net_side, net_eq, rng)
         if (g + 1) % 50 == 0:
             wr = wins / (g + 1)
             print(f"  game {g+1}/{n} net_winrate={wr:.3f}", flush=True)

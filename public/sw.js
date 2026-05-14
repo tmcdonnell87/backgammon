@@ -3,7 +3,7 @@
 // install; everything else (hashed asset bundles, weights) is cached on first
 // fetch. After one online load, the app runs offline.
 
-const CACHE_NAME = "backgammon-v1";
+const CACHE_NAME = "backgammon-v2";
 const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {

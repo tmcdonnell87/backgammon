@@ -31,7 +31,6 @@ export interface Position {
   score: [number, number];
   matchLength: number; // 1 for money/single game; >1 for matches
   crawford: boolean;
-  postCrawford: boolean;
 }
 
 export function startingPosition(opts: { matchLength?: number } = {}): Position {
@@ -59,7 +58,6 @@ export function startingPosition(opts: { matchLength?: number } = {}): Position 
     score: [0, 0],
     matchLength: opts.matchLength ?? 1,
     crawford: false,
-    postCrawford: false,
   };
 }
 
@@ -76,7 +74,6 @@ export function clonePosition(p: Position): Position {
     score: [p.score[0], p.score[1]],
     matchLength: p.matchLength,
     crawford: p.crawford,
-    postCrawford: p.postCrawford,
   };
 }
 
@@ -97,7 +94,6 @@ export function mirror(p: Position): Position {
     score: [p.score[0], p.score[1]],
     matchLength: p.matchLength,
     crawford: p.crawford,
-    postCrawford: p.postCrawford,
   };
 }
 

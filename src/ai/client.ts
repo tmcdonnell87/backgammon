@@ -3,9 +3,10 @@
 
 import { AIClient, MoveAnalysis } from "./api";
 import { Play } from "../engine/moves";
-import { Position } from "../engine/position";
+import { Position, Side } from "../engine/position";
 import { Difficulty } from "./levels";
-import { analyzeMove, pickMove } from "./engine";
+import { analyzeMove, pickMove, decideCube, decideTake } from "./engine";
+import { CubeAction, TakeAction } from "./cubeDecision";
 
 type Pending = {
   resolve: (v: unknown) => void;
@@ -51,14 +52,32 @@ export function createWorkerClient(): AIClient {
       });
       return r.play;
     },
-    async analyze(p: Position, legalPlays: Play[], difficulty: Difficulty): Promise<MoveAnalysis> {
+    async analyze(p: Position, legalPlays: Play[], difficulty: Difficulty, awayUs?: number, awayThem?: number): Promise<MoveAnalysis> {
       const r = await send<{ bestPlay: Play; bestEquity: number; equities: number[] }>({
         type: "analyze",
         pos: serialize(p),
         legalPlays,
         difficulty,
+        awayUs,
+        awayThem,
       });
       return { bestPlay: r.bestPlay, bestEquity: r.bestEquity, equities: r.equities };
+    },
+    async decideCube(p: Position, side: Side): Promise<CubeAction> {
+      const r = await send<{ action: CubeAction }>({
+        type: "cube",
+        pos: serialize(p),
+        side,
+      });
+      return r.action;
+    },
+    async decideTake(p: Position, side: Side): Promise<TakeAction> {
+      const r = await send<{ action: TakeAction }>({
+        type: "take",
+        pos: serialize(p),
+        side,
+      });
+      return r.action;
     },
   };
 }
@@ -70,10 +89,18 @@ export function createMainThreadClient(): AIClient {
       await new Promise<void>((res) => setTimeout(res, 0));
       return pickMove(p, legalPlays, difficulty);
     },
-    async analyze(p, legalPlays, difficulty) {
+    async analyze(p, legalPlays, difficulty, awayUs, awayThem) {
       await new Promise<void>((res) => setTimeout(res, 0));
-      const a = analyzeMove(p, legalPlays, difficulty);
+      const a = analyzeMove(p, legalPlays, difficulty, awayUs, awayThem);
       return { bestPlay: a.bestPlay, bestEquity: a.bestEquity, equities: a.equities };
+    },
+    async decideCube(p, side) {
+      await new Promise<void>((res) => setTimeout(res, 0));
+      return decideCube(p, side);
+    },
+    async decideTake(p, side) {
+      await new Promise<void>((res) => setTimeout(res, 0));
+      return decideTake(p, side);
     },
   };
 }
