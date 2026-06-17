@@ -18,7 +18,7 @@ jobs:
           version: 11
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
       # pnpm blocks esbuild's postinstall by default; approve it so vite can build.
       - name: Approve esbuild build
