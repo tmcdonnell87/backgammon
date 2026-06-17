@@ -22,7 +22,8 @@ jobs:
           cache: pnpm
       # pnpm blocks esbuild's postinstall by default; approve it so vite can build.
       - name: Approve esbuild build
-        run: printf 'allowBuilds:\n  esbuild: true\n' > pnpm-workspace.yaml
+        run: |
+          printf 'allowBuilds:\n  esbuild: true\n' > pnpm-workspace.yaml
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm build
       - uses: webfactory/ssh-agent@v0.9.0
