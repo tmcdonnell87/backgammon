@@ -37,7 +37,11 @@ export interface RenderOpts {
   equity?: number | null;
 }
 
-function buildDefs(): SVGDefsElement {
+// Exported (alongside renderBoard) so the design-asset export harness in
+// scripts/export-svg.ts can compose isolated, high-resolution snapshots of a
+// single checker / die / the gradient+filter defs from the REAL renderer —
+// guaranteeing the exported assets never drift from what ships in-game.
+export function buildDefs(): SVGDefsElement {
   const defs = el("defs");
   defs.innerHTML = `
     <linearGradient id="lg-point-light" x1="0" y1="0" x2="0" y2="1">
@@ -886,7 +890,7 @@ function pointSlotPos(L: BoardLayout, idx: number, slot: number, flipped: boolea
   return L.checkerCenter(idx, Math.min(slot, 4), flipped);
 }
 
-function makeChecker(cx: number, cy: number, absSide: "white" | "black"): SVGGElement {
+export function makeChecker(cx: number, cy: number, absSide: "white" | "black"): SVGGElement {
   const g = el("g", { "pointer-events": "none" });
   const fillId = absSide === "white" ? "rg-checker-white" : "rg-checker-black";
   // Single disc with a substantive dark edge stroke — reads as a flat
@@ -1017,7 +1021,7 @@ export async function animateSubMove(
   });
 }
 
-function renderDie(value: number, x: number, y: number, size: number, used: boolean, ourColor: "white" | "black"): SVGGElement {
+export function renderDie(value: number, x: number, y: number, size: number, used: boolean, ourColor: "white" | "black"): SVGGElement {
   const g = el("g", {});
   const isWhite = ourColor === "white";
   const faceId = used
