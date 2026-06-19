@@ -131,6 +131,15 @@ async function main(): Promise<void> {
   const DRAG_THRESHOLD = 12;
 
   svg.addEventListener("pointerdown", (ev) => {
+    // Idle board (no game in progress): a tap anywhere starts a new game with
+    // the current settings — the "tap new game" affordance the menu's onClose
+    // alludes to. The 🎲 button still opens the settings dialog for changes.
+    if (controller.state.phase.kind === "menu") {
+      recordTap({ event: "pointerdown", reason: "menu-tap-start", clientX: ev.clientX, clientY: ev.clientY, targetTag: (ev.target as Element | null)?.tagName });
+      controller.startNewMatch();
+      attemptOrientationLock();
+      return;
+    }
     if (controller.state.phase.kind !== "play") {
       recordTap({ event: "pointerdown", reason: "wrong-phase", clientX: ev.clientX, clientY: ev.clientY, targetTag: (ev.target as Element | null)?.tagName });
       return;
