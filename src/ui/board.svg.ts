@@ -44,28 +44,44 @@ export interface RenderOpts {
 export function buildDefs(): SVGDefsElement {
   const defs = el("defs");
   defs.innerHTML = `
+    <!-- Point triangles — cleaner cream on the light points, deeper warm wood
+         on the dark ones (warmer than near-black so they read as a figure on
+         the felt rather than holes). -->
     <linearGradient id="lg-point-light" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e6c89a"/>
-      <stop offset="55%" stop-color="#c39862"/>
-      <stop offset="100%" stop-color="#8d6234"/>
+      <stop offset="0%" stop-color="#f3ddb2"/>
+      <stop offset="52%" stop-color="#dcab6c"/>
+      <stop offset="100%" stop-color="#a7763d"/>
     </linearGradient>
     <linearGradient id="lg-point-dark" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#5a2f15"/>
-      <stop offset="55%" stop-color="#361a08"/>
-      <stop offset="100%" stop-color="#1a0c04"/>
+      <stop offset="0%" stop-color="#742f12"/>
+      <stop offset="55%" stop-color="#431c0a"/>
+      <stop offset="100%" stop-color="#190a03"/>
     </linearGradient>
-    <!-- Checker gradients: gradient circle centered (cx/cy=0.5) so the
-         shading wraps the full disk evenly, but focal point at (0.32,0.30)
-         places the brightest spot upper-left. Two stops, low contrast —
-         reads as a flat playing piece with a soft directional light cue,
-         not a 3D marble. -->
-    <radialGradient id="rg-checker-white" cx="0.5" cy="0.5" r="0.7" fx="0.32" fy="0.30">
-      <stop offset="0%" stop-color="#ebe2c5"/>
-      <stop offset="100%" stop-color="#a8987a"/>
+    <!-- Checker body: a 4-stop dome (cx/cy=0.5, focal upper-left at
+         0.37/0.30) rather than the old flat 2-stop disc. makeChecker layers a
+         bevel ring, three tooling grooves, a raised center boss, and a blurred
+         specular highlight on top to read as a turned/tooled stone. The boss
+         gradients light the raised center; the bevel/groove gradients are
+         objectBoundingBox (default) so one def auto-fits every circle radius. -->
+    <radialGradient id="rg-checker-white" cx="0.5" cy="0.5" r="0.62" fx="0.37" fy="0.30">
+      <stop offset="0%" stop-color="#fcf7ea"/>
+      <stop offset="45%" stop-color="#ecdfc2"/>
+      <stop offset="82%" stop-color="#c9b88f"/>
+      <stop offset="100%" stop-color="#9b8a62"/>
     </radialGradient>
-    <radialGradient id="rg-checker-black" cx="0.5" cy="0.5" r="0.7" fx="0.32" fy="0.30">
-      <stop offset="0%" stop-color="#42414b"/>
-      <stop offset="100%" stop-color="#12111a"/>
+    <radialGradient id="rg-checker-white-boss" cx="0.5" cy="0.5" r="0.6" fx="0.38" fy="0.32">
+      <stop offset="0%" stop-color="#fffaf0"/>
+      <stop offset="100%" stop-color="#d8c8a0"/>
+    </radialGradient>
+    <radialGradient id="rg-checker-black" cx="0.5" cy="0.5" r="0.62" fx="0.37" fy="0.30">
+      <stop offset="0%" stop-color="#56555f"/>
+      <stop offset="45%" stop-color="#2c2b36"/>
+      <stop offset="82%" stop-color="#16151e"/>
+      <stop offset="100%" stop-color="#08070b"/>
+    </radialGradient>
+    <radialGradient id="rg-checker-black-boss" cx="0.5" cy="0.5" r="0.6" fx="0.38" fy="0.32">
+      <stop offset="0%" stop-color="#5a5965"/>
+      <stop offset="100%" stop-color="#1a1922"/>
     </radialGradient>
     <radialGradient id="rg-checker-white-used" cx="0.5" cy="0.5" r="0.7" fx="0.32" fy="0.30">
       <stop offset="0%" stop-color="#c5bca0"/>
@@ -75,6 +91,26 @@ export function buildDefs(): SVGDefsElement {
       <stop offset="0%" stop-color="#2e2d36"/>
       <stop offset="100%" stop-color="#0a090f"/>
     </radialGradient>
+    <!-- Vertical bevel (lit top / shadowed base) and incised tooling groove,
+         in white-checker and black-checker (-b) variants. -->
+    <linearGradient id="lg-ck-bevel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="lg-ck-bevel-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.6"/>
+    </linearGradient>
+    <linearGradient id="lg-ck-groove" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="lg-ck-groove-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.22"/>
+    </linearGradient>
     <linearGradient id="lg-bar" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#150a05"/>
       <stop offset="20%" stop-color="#3a2418"/>
@@ -104,32 +140,64 @@ export function buildDefs(): SVGDefsElement {
       <stop offset="100%" stop-color="#321609"/>
     </linearGradient>
     <linearGradient id="lg-die-white" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#e2d8b8"/>
-      <stop offset="100%" stop-color="#b3a884"/>
+      <stop offset="0%" stop-color="#f6efda"/>
+      <stop offset="50%" stop-color="#e8debf"/>
+      <stop offset="100%" stop-color="#c9bd97"/>
     </linearGradient>
     <linearGradient id="lg-die-black" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#34343c"/>
       <stop offset="100%" stop-color="#16161c"/>
     </linearGradient>
     <linearGradient id="lg-die-white-used" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#bbb59a"/>
-      <stop offset="100%" stop-color="#807760"/>
+      <stop offset="0%" stop-color="#cfc7ad"/>
+      <stop offset="100%" stop-color="#9a906f"/>
     </linearGradient>
     <linearGradient id="lg-die-black-used" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#2a2a32"/>
       <stop offset="100%" stop-color="#0c0a0e"/>
     </linearGradient>
-    <radialGradient id="rg-pip-dark" cx="0.3" cy="0.3" r="0.7">
-      <stop offset="0%" stop-color="#3a3528"/>
-      <stop offset="100%" stop-color="#0c0a06"/>
+    <!-- Soft top-down sheen laid over the active (unused) die face. -->
+    <linearGradient id="lg-die-sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.4"/>
+      <stop offset="42%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <!-- Drilled pip wells. The dark recess reads as a hole on the light
+         (white) die; the -light variants keep black-die pips legible while
+         preserving the same recessed look. renderDie adds a faint
+         bottom-bounce highlight inside each well. -->
+    <radialGradient id="rg-pip-well" cx="0.5" cy="0.4" r="0.62">
+      <stop offset="0%" stop-color="#0c0a07"/>
+      <stop offset="65%" stop-color="#2a261d"/>
+      <stop offset="100%" stop-color="#6a5f49"/>
     </radialGradient>
-    <radialGradient id="rg-pip-light" cx="0.3" cy="0.3" r="0.7">
+    <radialGradient id="rg-pip-well-used" cx="0.5" cy="0.4" r="0.62">
+      <stop offset="0%" stop-color="#1c1913"/>
+      <stop offset="70%" stop-color="#3a3428"/>
+      <stop offset="100%" stop-color="#6a5f49"/>
+    </radialGradient>
+    <radialGradient id="rg-pip-well-light" cx="0.5" cy="0.4" r="0.62">
       <stop offset="0%" stop-color="#fffdf3"/>
-      <stop offset="100%" stop-color="#bbb59a"/>
+      <stop offset="65%" stop-color="#d8cdb0"/>
+      <stop offset="100%" stop-color="#8a8068"/>
+    </radialGradient>
+    <radialGradient id="rg-pip-well-light-used" cx="0.5" cy="0.4" r="0.62">
+      <stop offset="0%" stop-color="#e6ddc6"/>
+      <stop offset="70%" stop-color="#c4baa0"/>
+      <stop offset="100%" stop-color="#8a8068"/>
     </radialGradient>
     <filter id="f-shadow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0.5" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.40"/>
+      <feDropShadow dx="0.6" dy="1.4" stdDeviation="1.3" flood-color="#000" flood-opacity="0.5"/>
     </filter>
+    <!-- Blur for the checker specular highlight ellipse. stdDeviation is in
+         user units (== 6 * R/90 at the current 23.25 disc radius). -->
+    <filter id="f-ck-spec" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="1.6"/>
+    </filter>
+    <!-- Felt depth — radial darkening toward the bed corners. -->
+    <radialGradient id="rg-felt-vignette" cx="0.5" cy="0.5" r="0.72">
+      <stop offset="52%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.42"/>
+    </radialGradient>
     <filter id="f-die-shadow" x="-50%" y="-50%" width="200%" height="200%">
       <feDropShadow dx="2" dy="3" stdDeviation="2" flood-color="#000" flood-opacity="0.55"/>
     </filter>
@@ -252,6 +320,20 @@ export function renderBoard(svg: SVGSVGElement, p: Position, opts: RenderOpts): 
       height: innerH,
       fill: "#6b4226",
       filter: "url(#f-felt-grain)",
+      rx: 2,
+      "pointer-events": "none",
+    }),
+  );
+  // Felt depth — a radial vignette that darkens toward the bed corners. Drawn
+  // over the bare felt so every later element (bar, trays, points, checkers)
+  // sits on top of it.
+  svg.appendChild(
+    el("rect", {
+      x: innerX,
+      y: innerY,
+      width: innerW,
+      height: innerH,
+      fill: "url(#rg-felt-vignette)",
       rx: 2,
       "pointer-events": "none",
     }),
@@ -558,7 +640,7 @@ export function renderBoard(svg: SVGSVGElement, p: Position, opts: RenderOpts): 
     const tri = el("polygon", {
       points: `${left},${g.baseY} ${right},${g.baseY} ${g.cx},${g.apexY}`,
       fill,
-      stroke: "rgba(0,0,0,0.35)",
+      stroke: "rgba(0,0,0,0.4)",
       "stroke-width": 0.75,
       filter: "url(#f-soft-shadow)",
     });
@@ -573,8 +655,10 @@ export function renderBoard(svg: SVGSVGElement, p: Position, opts: RenderOpts): 
     // dark points already contrasts; the dark diamond on light points
     // needs to be much darker than the felt, otherwise the overhang
     // blends into the background and the diamond appears constrained.
-    const diamondCY = g.isTop ? g.apexY - 14 : g.apexY + 14;
-    const diamondFill = isLight ? "#1a0a02" : "#e6c89a";
+    // Diamond inlay sits 8px from the point apex (the refined art nudged it in
+    // from 14px, closer to the tip, where it reads as a traditional inlaid pip).
+    const diamondCY = g.isTop ? g.apexY - 8 : g.apexY + 8;
+    const diamondFill = isLight ? "#23110a" : "#f0d5a6";
     // The diamond is wider (7) than the triangle at this distance from the
     // apex (~3.6 units), so its left/right tips overhang onto the felt
     // (#5a3a2a). The light diamond's overhang reads naturally against the
@@ -588,11 +672,42 @@ export function renderBoard(svg: SVGSVGElement, p: Position, opts: RenderOpts): 
       "pointer-events": "none",
     };
     if (isLight) {
-      attrs.stroke = "rgba(230, 200, 154, 0.55)";
-      attrs["stroke-width"] = 0.6;
+      attrs.stroke = "rgba(243,221,178,0.6)";
+      attrs["stroke-width"] = 0.7;
     }
     svg.appendChild(el("polygon", attrs));
   }
+
+  // Bed edge — a recessed shadow lip plus a thin warm lit lip just inside it,
+  // so the felt reads as set down into the wood frame. Drawn after the points
+  // (matching the refined reference) so the lip frames the whole bed; UI
+  // overlays (selection / legal markers / checkers) still draw on top.
+  svg.appendChild(
+    el("rect", {
+      x: innerX,
+      y: innerY,
+      width: innerW,
+      height: innerH,
+      fill: "none",
+      stroke: "rgba(0,0,0,0.5)",
+      "stroke-width": 2,
+      rx: 2,
+      "pointer-events": "none",
+    }),
+  );
+  svg.appendChild(
+    el("rect", {
+      x: innerX + 1.5,
+      y: innerY + 1.5,
+      width: innerW - 3,
+      height: innerH - 3,
+      fill: "none",
+      stroke: "rgba(255,217,160,0.16)",
+      "stroke-width": 1,
+      rx: 1.5,
+      "pointer-events": "none",
+    }),
+  );
 
   // Highlight: selected source
   if (opts.selectedFrom !== null && opts.selectedFrom >= 0 && opts.selectedFrom < 24) {
@@ -891,19 +1006,69 @@ function pointSlotPos(L: BoardLayout, idx: number, slot: number, flipped: boolea
 }
 
 export function makeChecker(cx: number, cy: number, absSide: "white" | "black"): SVGGElement {
-  const g = el("g", { "pointer-events": "none" });
-  const fillId = absSide === "white" ? "rg-checker-white" : "rg-checker-black";
-  // Single disc with a substantive dark edge stroke — reads as a flat
-  // playing piece with a beveled rim rather than a 3D sphere.
+  const isW = absSide === "white";
+  // Turned/tooled stone: a domed body, a lit rim bevel, three incised tooling
+  // grooves, a raised center boss (+ its own bevel), and a soft blurred
+  // specular highlight upper-left. Every layer radius scales with the disc
+  // radius via s = R/90, so the look holds if CHECKER_R changes; values are
+  // rounded to 2dp to keep the emitted markup tidy. The group is translated to
+  // (cx,cy) and the layers drawn at the origin, so f-shadow casts one shadow
+  // for the whole stone. Pick the black (-b) bevel/groove + black boss/stroke
+  // when rendering a dark checker.
+  const R = CHECKER_R - 0.75;
+  const s = R / 90;
+  const q = (n: number): number => Math.round(n * 100) / 100;
+  const body = isW ? "rg-checker-white" : "rg-checker-black";
+  const boss = isW ? "rg-checker-white-boss" : "rg-checker-black-boss";
+  const bevel = isW ? "url(#lg-ck-bevel)" : "url(#lg-ck-bevel-b)";
+  const groove = isW ? "url(#lg-ck-groove)" : "url(#lg-ck-groove-b)";
+
+  const g = el("g", {
+    "pointer-events": "none",
+    filter: "url(#f-shadow)",
+    transform: `translate(${cx},${cy})`,
+  });
+  // Body disc.
   g.appendChild(
     el("circle", {
-      cx,
-      cy,
-      r: CHECKER_R - 0.75,
-      fill: `url(#${fillId})`,
-      stroke: absSide === "white" ? "#3a2614" : "#000000",
-      "stroke-width": 1.5,
-      filter: "url(#f-shadow)",
+      r: q(R),
+      fill: `url(#${body})`,
+      stroke: isW ? "#7a6a45" : "#000000",
+      "stroke-width": 0.5,
+    }),
+  );
+  // Rim bevel — lit top, shadowed base.
+  g.appendChild(
+    el("circle", { r: q(86 * s), fill: "none", stroke: bevel, "stroke-width": q(6 * s) }),
+  );
+  // Three concentric tooling grooves.
+  for (const rr of [74, 60, 46]) {
+    g.appendChild(
+      el("circle", { r: q(rr * s), fill: "none", stroke: groove, "stroke-width": q(2.5 * s) }),
+    );
+  }
+  // Raised center boss + its bevel.
+  g.appendChild(
+    el("circle", {
+      r: q(34 * s),
+      fill: `url(#${boss})`,
+      stroke: isW ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.5)",
+      "stroke-width": 0.4,
+    }),
+  );
+  g.appendChild(
+    el("circle", { r: q(34 * s), fill: "none", stroke: bevel, "stroke-width": q(3 * s) }),
+  );
+  // Soft specular highlight, upper-left.
+  g.appendChild(
+    el("ellipse", {
+      cx: q(-22 * s),
+      cy: q(-28 * s),
+      rx: q(30 * s),
+      ry: q(20 * s),
+      fill: "#ffffff",
+      "fill-opacity": isW ? 0.5 : 0.26,
+      filter: "url(#f-ck-spec)",
     }),
   );
   return g as SVGGElement;
@@ -1000,8 +1165,6 @@ export async function animateSubMove(
   const end = checkerAnchor(before, sub.to, "to", flipped, layout);
   const ghost = makeChecker(start.cx, start.cy, ourColor);
   svg.appendChild(ghost);
-  const dx0 = start.cx;
-  const dy0 = start.cy;
   const t0 = performance.now();
   await new Promise<void>((resolve) => {
     const step = (now: number): void => {
@@ -1009,7 +1172,9 @@ export async function animateSubMove(
       const eased = 1 - (1 - t) ** 2;
       const cx = start.cx + (end.cx - start.cx) * eased;
       const cy = start.cy + (end.cy - start.cy) * eased;
-      ghost.setAttribute("transform", `translate(${cx - dx0} ${cy - dy0})`);
+      // makeChecker draws its layers at the origin and bakes the position into
+      // the group transform, so animate by absolute position (not a delta).
+      ghost.setAttribute("transform", `translate(${cx},${cy})`);
       if (t >= 1) {
         ghost.remove();
         resolve();
@@ -1031,41 +1196,73 @@ export function renderDie(value: number, x: number, y: number, size: number, use
     : isWhite
       ? "lg-die-white"
       : "lg-die-black";
-  const pipId = isWhite ? "rg-pip-dark" : "rg-pip-light";
-  const stroke = isWhite ? "rgba(80, 60, 30, 0.55)" : "rgba(220, 220, 235, 0.20)";
-  // Die face with gradient fill, rounded corners, drop shadow.
-  g.appendChild(
+  // Drilled pip wells read as recesses: a dark well on the light (white) die,
+  // a light well on the dark (black) die, so pips stay countable either way.
+  const wellId = used
+    ? isWhite
+      ? "rg-pip-well-used"
+      : "rg-pip-well-light-used"
+    : isWhite
+      ? "rg-pip-well"
+      : "rg-pip-well-light";
+  const stroke = isWhite ? "rgba(90,70,35,0.5)" : "rgba(220,220,235,0.20)";
+  // Face + sheen + lit inner-bevel share a group so the used-die fade (0.72)
+  // and the drop shadow apply once to the whole die rather than compounding
+  // across the overlapping rects.
+  const faceGroup = el("g", {
+    opacity: used ? 0.72 : 1,
+    filter: "url(#f-die-shadow)",
+  });
+  // Die face — gradient fill, rounded corners.
+  faceGroup.appendChild(
     el("rect", {
       x,
       y,
       width: size,
       height: size,
-      rx: 8,
+      rx: 9,
       fill: `url(#${faceId})`,
       stroke,
       "stroke-width": 0.75,
-      filter: used ? "url(#f-soft-shadow)" : "url(#f-die-shadow)",
-      opacity: used ? 0.6 : 1,
     }),
   );
-  // Bevel highlight (subtle inset stripe).
-  g.appendChild(
+  // Top-down sheen — active (unused) die only.
+  if (!used) {
+    faceGroup.appendChild(
+      el("rect", {
+        x,
+        y,
+        width: size,
+        height: size,
+        rx: 9,
+        fill: "url(#lg-die-sheen)",
+        "pointer-events": "none",
+      }),
+    );
+  }
+  // Lit inner bevel. Per the handoff the white die uses a strong warm-white
+  // edge; the dark die gets a gentler version so the near-white stroke does
+  // not read as a harsh border on the black face.
+  faceGroup.appendChild(
     el("rect", {
-      x: x + 2,
-      y: y + 2,
-      width: size - 4,
-      height: size - 4,
-      rx: 6,
+      x: x + 1.5,
+      y: y + 1.5,
+      width: size - 3,
+      height: size - 3,
+      rx: 7.5,
       fill: "none",
-      stroke: isWhite ? "rgba(255,250,235,0.18)" : "rgba(255,255,255,0.05)",
-      "stroke-width": 0.5,
+      stroke: "#fffdf5",
+      "stroke-opacity": isWhite ? (used ? 0.22 : 0.5) : used ? 0.14 : 0.3,
+      "stroke-width": 0.75,
       "pointer-events": "none",
     }),
   );
+  g.appendChild(faceGroup);
   // Pip positions — strict 25%/50%/75% grid relative to the die bounding
   // box. All pips share the same radius so they look uniform across faces.
+  const pipGroup = el("g", { opacity: used ? 0.72 : 1 });
   const pad = size * 0.25;
-  const r = size * 0.085;
+  const r = Math.round(size * 0.085 * 100) / 100;
   const cxFn = (col: number) => x + pad + ((size - 2 * pad) * col) / 2;
   const cyFn = (row: number) => y + pad + ((size - 2 * pad) * row) / 2;
   const pipMap: Record<number, [number, number][]> = {
@@ -1077,15 +1274,14 @@ export function renderDie(value: number, x: number, y: number, size: number, use
     6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]],
   };
   for (const [c, row] of pipMap[value] ?? []) {
-    g.appendChild(
-      el("circle", {
-        cx: cxFn(c),
-        cy: cyFn(row),
-        r,
-        fill: `url(#${pipId})`,
-        opacity: used ? 0.55 : 1,
-      }),
+    const px = cxFn(c);
+    const py = cyFn(row);
+    // Drilled well + a faint warm bottom-bounce highlight inside it.
+    pipGroup.appendChild(el("circle", { cx: px, cy: py, r, fill: `url(#${wellId})` }));
+    pipGroup.appendChild(
+      el("circle", { cx: px, cy: py + 1.9, r: 1.7, fill: "#fff8e8", "fill-opacity": 0.14 }),
     );
   }
+  g.appendChild(pipGroup);
   return g;
 }
