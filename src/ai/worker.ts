@@ -10,6 +10,7 @@ import { Position, Side } from "../engine/position";
 import { loadNeuralEvaluator } from "./neural";
 import { loadMet } from "./met";
 import { loadBearoff } from "./bearoff";
+import { loadBook, setBook } from "./book";
 import { CubeAction, TakeAction } from "./cubeDecision";
 
 // Best-effort load of trained Expert weights. If absent, neural tiers
@@ -29,6 +30,14 @@ loadMet("/weights/met.json")
 // Best-effort load of the exact bear-off table. If absent, race endgame
 // falls through to the net's static evaluation.
 loadBearoff("/weights/bearoff.json").catch(() => {});
+
+// Best-effort load of the opening / reply book. If absent, openings fall
+// through to the search (the prior behavior).
+loadBook("/weights/opening_book.json")
+  .then((b) => {
+    if (b) setBook(b);
+  })
+  .catch(() => {});
 
 type Req =
   | { id: number; type: "pick"; pos: Position; legalPlays: Play[]; difficulty: Difficulty }

@@ -1,6 +1,7 @@
 import { GameController, Phase } from "./game/controller";
 import { loadSettings } from "./game/persistence";
 import { createWorkerClient } from "./ai/client";
+import { loadBook, setBook } from "./ai/book";
 import { renderBoard, animateSubMove } from "./ui/board.svg";
 import { BoardLayout, DESIGN_W, VIEW_H, makeLayout } from "./ui/layout";
 import {
@@ -21,6 +22,11 @@ async function main(): Promise<void> {
   registerServiceWorker();
   const settings = await loadSettings();
   const ai = createWorkerClient();
+  // The Worker loads the book itself; also load it here so the no-Worker
+  // fallback client (which runs the engine on the main thread) is booked too.
+  void loadBook("/weights/opening_book.json").then((b) => {
+    if (b) setBook(b);
+  }).catch(() => {});
   const controller = new GameController(settings, ai);
 
   const root = document.getElementById("app")!;

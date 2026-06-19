@@ -4,8 +4,9 @@
 import { Play, applyPlay } from "../engine/moves";
 import { Position, Side, hashPosition, mirror } from "../engine/position";
 import { checkWin } from "../engine/rules";
-import { LEVELS, Difficulty } from "./levels";
-import { rankPlays, pickWithNoise } from "./search";
+import { LEVELS, TUTOR_CONFIG, Difficulty } from "./levels";
+import { rankPlays, rankPlaysDeep, pickWithNoise } from "./search";
+import { bookEquities } from "./book";
 import { heuristicEvaluator } from "./heuristic";
 import { Evaluator } from "./evaluator";
 import { AnyNeuralEvaluator, OutcomeProbs } from "./neural";
@@ -65,6 +66,15 @@ export function pickMove(p: Position, legalPlays: Play[], difficulty: Difficulty
   if (legalPlays.length === 0) return [];
   if (legalPlays.length === 1) return legalPlays[0];
   const cfg = LEVELS[difficulty];
+  // Opening / reply book: when this (position, dice) is booked, rank by the
+  // book's points equity. The level's noise still applies, so weaker tiers
+  // keep some opening variety instead of always playing the single best.
+  const be = bookEquities(p, legalPlays, p.dice);
+  if (be && be.complete) {
+    const scored = legalPlays.map((play, i) => ({ play, equity: be.pointsEq[i] }));
+    scored.sort((a, b) => b.equity - a.equity);
+    return pickWithNoise(scored, cfg.noise);
+  }
   const ev = evaluatorFor(cfg.evaluator);
   const ranked = rankPlays(p, legalPlays, ev, cfg.plies);
   return pickWithNoise(ranked, cfg.noise);
@@ -127,15 +137,40 @@ export function analyzeMove(
 ): AnalysisResult {
   if (legalPlays.length === 0) return { bestPlay: [], bestEquity: 0, equities: [] };
 
-  const cfg = LEVELS[difficulty];
-  const ev = evaluatorFor(cfg.analysisEvaluator);
-  // Score every play (no noise) at analysisPlies depth. rankPlays dedupes by
+  // 1) Opening / reply book. Independent of opponent difficulty: grade against
+  // gnubg-derived game equities so a near-tie (within the threshold) is never
+  // flagged. Best is by points equity (gammon-aware), matching the search
+  // ranking below; reported equities are game equity (pWin - pLoss).
+  const be = bookEquities(p, legalPlays, p.dice);
+  if (be && be.complete) {
+    let bestI = 0;
+    for (let i = 1; i < legalPlays.length; i++) {
+      if (be.pointsEq[i] > be.pointsEq[bestI]) bestI = i;
+    }
+    return { bestPlay: legalPlays[bestI], bestEquity: be.gameEq[bestI], equities: be.gameEq };
+  }
+
+  // 2) Strong, difficulty-independent analysis: the tutor and equity bar always
+  // use the neural evaluator at a deep, filtered search (TUTOR_CONFIG) — NOT
+  // the opponent's level. Playing Casual must not give you 0-ply coaching.
+  void difficulty;
+  const ev = evaluatorFor(TUTOR_CONFIG.evaluator);
+  // Score every play (no noise) with the filtered deep search. It dedupes by
   // final internally, so `scored` has one entry per unique final. We map
   // equities back to every input play via the final-position hash, so two
   // orderings reaching the same final share an equity (which is correct —
-  // they ARE equivalent outcomes). The scalar score is what determines the
-  // play ranking (and stays compatible with the existing 2-ply analysis).
-  const scored = rankPlays(p, legalPlays, ev, cfg.analysisPlies);
+  // they ARE equivalent outcomes). The scalar score determines the play
+  // ranking; a shared per-call cache memoizes overlapping leaves.
+  // Only the 3-ply path is filtered (it would otherwise be too slow). At 1/2
+  // ply we search exhaustively so the tutor's "best" is exact — never pruned.
+  const filtered = TUTOR_CONFIG.plies >= 3;
+  const scored = rankPlaysDeep(p, legalPlays, ev, {
+    plies: TUTOR_CONFIG.plies,
+    keepTop: filtered ? TUTOR_CONFIG.keepTop : Infinity,
+    keepWindow: filtered ? TUTOR_CONFIG.keepWindow : Infinity,
+    innerKeep: filtered ? TUTOR_CONFIG.innerKeep : Infinity,
+    cache: new Map<string, number>(),
+  });
   const eqByFinal = new Map<string, number>();
   for (const s of scored) {
     const h = hashPosition(applyPlay(p, s.play));

@@ -123,6 +123,142 @@ export function rankPlays(
   return scored;
 }
 
+// ---------------------------------------------------------------------------
+// Filtered deep search (tutor / hint tier).
+//
+// score2ply scores EVERY legal play with a full 21-roll opponent expansion and
+// no filtering — fine at 2-ply, but a 3rd ply over every play is infeasible.
+// rankPlaysDeep instead (1) prefilters candidates with a cheap 0-ply pass,
+// (2) deep-searches only the survivors, and (3) bounds the branching at each
+// interior node to the top `innerKeep` replies. A per-call memo cache keyed by
+// board hash collapses the heavily-overlapping leaf positions.
+//
+// Depth mapping (matches the existing convention): a candidate play is scored
+// as `-positionValue(mirror(after), plies-1)`. So plies=1 reproduces score0ply
+// and plies=2 reproduces score2ply exactly (with no inner filtering).
+// ---------------------------------------------------------------------------
+
+export interface SearchOpts {
+  plies: 1 | 2 | 3;
+  keepTop?: number; // root survivors that get the deep search (default 10)
+  keepWindow?: number; // also keep root plays within this equity of the best (default 0.08)
+  innerKeep?: number; // top-N replies expanded at each interior node (default 8)
+  cache?: Map<string, number>; // memo: hashPosition -> static equity
+}
+
+function cachedEval(q: Position, ev: Evaluator, cache: Map<string, number>): number {
+  // ev.evaluate is a pure function of the board (dice/cube/score ignored), so
+  // memoizing by hashPosition is exact. It also applies the bearoff shortcut.
+  const h = hashPosition(q);
+  const c = cache.get(h);
+  if (c !== undefined) return c;
+  const v = ev.evaluate(q);
+  cache.set(h, v);
+  return v;
+}
+
+// 0-ply value of each play from `q`'s perspective (q to move): apply, then
+// negate the opponent-POV static eval. Used as the interior-node prefilter.
+function zeroPlyScored(
+  q: Position,
+  plays: Play[],
+  ev: Evaluator,
+  cache: Map<string, number>,
+): { play: Play; eq: number }[] {
+  const out: { play: Play; eq: number }[] = [];
+  for (const play of plays) {
+    const after = applyPlay(q, play);
+    const term = terminalEquityAfterMyPlay(after);
+    const eq = term !== null ? term : -cachedEval(mirror(after), ev, cache);
+    out.push({ play, eq });
+  }
+  return out;
+}
+
+// Value of position `q` (q is on roll, about to roll dice) from q's own
+// perspective, looking `depth` rolls ahead. depth=0 is the static leaf eval.
+function positionValue(
+  q: Position,
+  ev: Evaluator,
+  depth: number,
+  innerKeep: number,
+  cache: Map<string, number>,
+): number {
+  if (depth <= 0) return cachedEval(q, ev, cache);
+  let total = 0;
+  for (const [d1, d2, prob] of ALL_ROLLS) {
+    const plays = dedupePlaysByFinal(q, generatePlays(q, d1, d2));
+    // Filter to the top `innerKeep` replies by a cheap 0-ply pass when there
+    // are more than that; otherwise keep all (so parity with score2ply holds
+    // when innerKeep is large).
+    let cand: Play[];
+    if (plays.length <= innerKeep) {
+      cand = plays;
+    } else {
+      const z = zeroPlyScored(q, plays, ev, cache);
+      z.sort((a, b) => b.eq - a.eq);
+      cand = z.slice(0, innerKeep).map((s) => s.play);
+    }
+    let best = -Infinity;
+    for (const pl of cand) {
+      const after = applyPlay(q, pl);
+      const term = terminalEquityAfterMyPlay(after);
+      const v = term !== null ? term : -positionValue(mirror(after), ev, depth - 1, innerKeep, cache);
+      if (v > best) best = v;
+    }
+    total += prob * best;
+  }
+  return total;
+}
+
+// Rank plays with a filtered deep search. Returns one ScoredPlay per unique
+// final, covering every input play's final (non-survivors keep their 0-ply
+// prefilter equity — a play the prefilter drops is already a clear error, so a
+// cheap grade for it is acceptable).
+export function rankPlaysDeep(
+  p: Position,
+  plays: Play[],
+  ev: Evaluator,
+  opts: SearchOpts,
+): ScoredPlay[] {
+  if (plays.length === 0 || (plays.length === 1 && plays[0].length === 0)) {
+    return [{ play: plays[0] ?? [], equity: 0 }];
+  }
+  const unique = dedupePlaysByFinal(p, plays);
+  const depthAfter = opts.plies - 1;
+  const cache = opts.cache ?? new Map<string, number>();
+
+  // 0-ply: just the static pass.
+  if (depthAfter <= 0) {
+    const scored = score0ply(p, unique, ev);
+    scored.sort((a, b) => b.equity - a.equity);
+    return scored;
+  }
+
+  // Prefilter by 0-ply, then split into survivors (deep-searched) and the rest.
+  const pre = score0ply(p, unique, ev);
+  pre.sort((a, b) => b.equity - a.equity);
+  const keepTop = opts.keepTop ?? 10;
+  const keepWindow = opts.keepWindow ?? 0.08;
+  const innerKeep = opts.innerKeep ?? 8;
+  const best0 = pre.length ? pre[0].equity : -Infinity;
+
+  const out: ScoredPlay[] = [];
+  for (let i = 0; i < pre.length; i++) {
+    const sp = pre[i];
+    if (i < keepTop || sp.equity >= best0 - keepWindow) {
+      const after = applyPlay(p, sp.play);
+      const term = terminalEquityAfterMyPlay(after);
+      const eq = term !== null ? term : -positionValue(mirror(after), ev, depthAfter, innerKeep, cache);
+      out.push({ play: sp.play, equity: eq });
+    } else {
+      out.push(sp); // keep the cheap prefilter equity
+    }
+  }
+  out.sort((a, b) => b.equity - a.equity);
+  return out;
+}
+
 // Pick a play with optional noise: perturb each equity by Gaussian noise and pick max.
 // Higher `noise` simulates a weaker opponent who occasionally chooses sub-optimally.
 export function pickWithNoise(scored: ScoredPlay[], noise: number, rng = Math.random): Play {

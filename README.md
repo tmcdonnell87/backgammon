@@ -82,6 +82,34 @@ forward pass are mirrored exactly between Python (`training/encoding.py`,
 `training/net.py`) and TypeScript (`src/ai/neural.ts`); a parity test in
 `test/neural.test.ts` pins them.
 
+## Opening / reply book
+
+Opening plays differ by only ~0.002–0.02 equity — inside the net's own noise —
+so the neural net mis-ranks them and the tutor used to flag the rollout-best
+opening as an "error". `public/weights/opening_book.json` fixes this: for every
+booked `(position, dice)` it stores gnubg's evaluation of **every** legal play,
+so both the move-picker (`src/ai/engine.ts` `pickMove`) and the tutor
+(`analyzeMove`) use authoritative equities and never flag a book-acceptable
+play. It covers all 15 opening rolls plus the opponent's reply to each opening's
+best play (all 21 reply rolls). Lookup is by a board hash + dice kept
+byte-identical between TS (`src/ai/book.ts`) and Python (`training/engine.py`),
+pinned by `test/fixtures/book_keys.json`.
+
+Regenerate (needs `gnubg`: `sudo apt-get install gnubg`):
+
+```bash
+cd training
+python3 build_opening_book.py --out ../public/weights/opening_book.json \
+                              --fixture ../test/fixtures/book_keys.json \
+                              --workers 6 --ply 2
+```
+
+Tutor analysis is decoupled from the opponent difficulty (it always uses the
+neural net, not the level you're playing) via `TUTOR_CONFIG` in
+`src/ai/levels.ts`, and runs a filtered deep search (`rankPlaysDeep` in
+`src/ai/search.ts`). It defaults to 2-ply (fast enough to run on every move);
+set `TUTOR_CONFIG.plies = 3` to trade ~1–5 s/move of latency for more accuracy.
+
 ## Layout
 
 ```

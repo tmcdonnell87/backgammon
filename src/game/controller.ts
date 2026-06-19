@@ -692,9 +692,13 @@ export class GameController {
 }
 
 function classifyEquityLoss(eq: number): TutorEntry["classification"] {
-  if (eq < 0.02) return "good";
-  if (eq < 0.04) return "doubtful";
-  if (eq < 0.08) return "error";
+  // Bands on cubeless game equity (pWin - pLoss), mirroring gnubg's EMG bands
+  // but widened a touch on the "good" end to absorb residual 2-3 ply / rollout
+  // noise so a near-tie is not flagged. The book + deep neural search supply
+  // the equities; these thresholds just classify the loss.
+  if (eq < 0.024) return "good";
+  if (eq < 0.045) return "doubtful";
+  if (eq < 0.09) return "error";
   return "blunder";
 }
 
