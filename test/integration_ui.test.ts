@@ -36,7 +36,7 @@ describe("UI Hint to Equity Integration", () => {
       whiteName: "White",
       blackName: "Black",
       cpuDifficulty: "expert",
-      tutorEnabled: true,
+      tutorMode: "tutor",
       showPipCount: true,
       showEquity: true,
     };

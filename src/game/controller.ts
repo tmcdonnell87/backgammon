@@ -15,6 +15,14 @@ import { saveGame, saveSettings } from "./persistence";
 
 export type PlayerKind = "human" | "cpu";
 
+// Coaching mode:
+//  - "off":     no analysis, no flags, no report.
+//  - "tutor":   analyze every human move and pop an error/blunder flag on the
+//               turn it happens (gating the next roll); plus an end-of-game report.
+//  - "trainer": analyze silently and only reveal the net play rating (PR)
+//               in the end-of-game report — no per-turn interruptions.
+export type TutorMode = "off" | "tutor" | "trainer";
+
 export interface GameSettings {
   matchLength: number;
   cubeEnabled: boolean;
@@ -23,7 +31,7 @@ export interface GameSettings {
   whiteName: string;
   blackName: string;
   cpuDifficulty: Difficulty;
-  tutorEnabled: boolean;
+  tutorMode: TutorMode;
   showPipCount: boolean;
   showEquity: boolean;
 }
@@ -446,7 +454,7 @@ export class GameController {
     // Capture tutor inputs BEFORE we mutate position/phase so the analysis
     // can run after we've already moved on visibly.
     let tutorCtx: { onRoll: Side; yourPlay: Play; legalPlays: Play[]; startPos: Position } | null = null;
-    if (this.state.settings.tutorEnabled && active) {
+    if (this.state.settings.tutorMode !== "off" && active) {
       const isHuman = onRoll === 0 ? this.state.settings.whitePlayer === "human" : this.state.settings.blackPlayer === "human";
       if (isHuman) {
         tutorCtx = {
@@ -518,9 +526,10 @@ export class GameController {
     this.state.phase = { kind: "roll" };
     this.emit();
     if (tutorCtx) {
-      // Tutor analysis gates the next roll — for error/blunder we keep the
-      // dice off the board until the user dismisses the modal via ackTutor().
-      void this.runTutorAnalysis(tutorCtx, /* gateRoll */ true);
+      // Record the analysis. In "tutor" mode an error/blunder keeps the dice
+      // off the board until the user dismisses the modal via ackTutor(); in
+      // "trainer" mode it just accrues silently toward the end-of-game report.
+      void this.runTutorAnalysis(tutorCtx);
     } else {
       setTimeout(() => this.rollDice(), 100);
     }
@@ -606,20 +615,20 @@ export class GameController {
     this.state.phase = { kind: "roll" };
     this.emit();
     if (tutorCtx) {
-      void this.runTutorAnalysis(tutorCtx, /* gateRoll */ true);
+      void this.runTutorAnalysis(tutorCtx);
     } else {
       setTimeout(() => this.rollDice(), 100);
     }
   }
 
   /**
-   * Run tutor analysis for a just-committed human play. If gateRoll is true,
-   * an error/blunder result pauses the next dice roll until ackTutor() is
-   * called (so the UI can show an analysis modal before the next roll).
+   * Run tutor analysis for a just-committed human play and record the entry.
+   * In "tutor" mode an error/blunder pauses the next dice roll until ackTutor()
+   * is called (so the UI can show an analysis modal first); in every other mode
+   * the roll proceeds immediately and the entry only feeds the end-of-game report.
    */
   private async runTutorAnalysis(
     ctx: { onRoll: Side; yourPlay: Play; legalPlays: Play[]; startPos: Position },
-    gateRoll: boolean,
   ): Promise<void> {
     let blocked = false;
     try {
@@ -645,13 +654,16 @@ export class GameController {
       };
       this.state.tutor.history.push(entry);
       this.state.tutor.lastEntry = entry;
-      blocked = gateRoll && (classification === "error" || classification === "blunder");
+      // Only "tutor" mode interrupts play; "trainer" stays silent until the report.
+      blocked =
+        this.state.settings.tutorMode === "tutor"
+        && (classification === "error" || classification === "blunder");
       if (blocked) this.tutorAckPending = true;
       this.emit();
     } catch (e) {
       // ignore tutor errors
     }
-    if (gateRoll && !blocked) {
+    if (!blocked) {
       setTimeout(() => this.rollDice(), 100);
     }
   }

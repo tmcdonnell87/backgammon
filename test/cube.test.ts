@@ -78,7 +78,7 @@ const CUBE_SETTINGS: GameSettings = {
   whiteName: "W",
   blackName: "B",
   cpuDifficulty: "casual",
-  tutorEnabled: false,
+  tutorMode: "off",
   showPipCount: false,
   showEquity: false,
 };

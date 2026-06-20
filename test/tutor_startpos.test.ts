@@ -12,7 +12,7 @@ function makeSettings(): GameSettings {
     whiteName: "White",
     blackName: "Black",
     cpuDifficulty: "casual",
-    tutorEnabled: true,
+    tutorMode: "tutor",
     showPipCount: false,
     showEquity: false,
   };

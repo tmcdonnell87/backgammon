@@ -12,15 +12,23 @@ const DEFAULT_SETTINGS: GameSettings = {
   whiteName: "You",
   blackName: "Computer",
   cpuDifficulty: "casual",
-  tutorEnabled: false,
+  tutorMode: "off",
   showPipCount: false,
   showEquity: false,
 };
 
 export async function loadSettings(): Promise<GameSettings> {
   try {
-    const v = (await get(KEY_SETTINGS)) as Partial<GameSettings> | undefined;
-    return { ...DEFAULT_SETTINGS, ...(v ?? {}) };
+    const raw = (await get(KEY_SETTINGS)) as
+      | (Partial<GameSettings> & { tutorEnabled?: boolean })
+      | undefined;
+    const v = { ...(raw ?? {}) };
+    // Migrate legacy boolean tutor flag → the three-way mode.
+    if (v.tutorMode === undefined && v.tutorEnabled !== undefined) {
+      v.tutorMode = v.tutorEnabled ? "tutor" : "off";
+    }
+    delete v.tutorEnabled;
+    return { ...DEFAULT_SETTINGS, ...v };
   } catch {
     return DEFAULT_SETTINGS;
   }

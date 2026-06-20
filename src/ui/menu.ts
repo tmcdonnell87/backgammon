@@ -64,6 +64,16 @@ export function showMenu(initial: GameSettings, cb: MenuCallbacks): HTMLElement 
         </select>
       </label>
     </div>
+    <div class="row">
+      <label>
+        <span>Tutor mode</span>
+        <select name="tutorMode">
+          <option value="tutor">Tutor — show errors on every turn</option>
+          <option value="trainer">Trainer — rate your play at the end</option>
+          <option value="off">None</option>
+        </select>
+      </label>
+    </div>
     <div class="actions">
       <button type="button" data-action="cancel">Cancel</button>
       <button type="button" class="primary" data-action="start">Start</button>
@@ -77,6 +87,7 @@ export function showMenu(initial: GameSettings, cb: MenuCallbacks): HTMLElement 
   const whiteName = modal.querySelector<HTMLInputElement>('input[name="whiteName"]')!;
   const blackName = modal.querySelector<HTMLInputElement>('input[name="blackName"]')!;
   const matchLen = modal.querySelector<HTMLSelectElement>('select[name="matchLength"]')!;
+  const tutorMode = modal.querySelector<HTMLSelectElement>('select[name="tutorMode"]')!;
 
   const bothHumanInitially = initial.whitePlayer === "human" && initial.blackPlayer === "human";
   opp.value = bothHumanInitially ? "human" : "cpu";
@@ -85,6 +96,7 @@ export function showMenu(initial: GameSettings, cb: MenuCallbacks): HTMLElement 
   whiteName.value = initial.whiteName;
   blackName.value = initial.blackName;
   matchLen.value = String(initial.matchLength);
+  tutorMode.value = initial.tutorMode;
 
   const updateVis = (): void => {
     const isCpu = opp.value === "cpu";
@@ -113,9 +125,7 @@ export function showMenu(initial: GameSettings, cb: MenuCallbacks): HTMLElement 
       whiteName: isCpu ? (yourIsWhite ? "You" : "Computer") : whiteName.value || "White",
       blackName: isCpu ? (yourIsWhite ? "Computer" : "You") : blackName.value || "Black",
       cpuDifficulty: diff.value as Difficulty,
-      // Tutor mode is now exclusively toggled in-game from the settings modal,
-      // so we preserve whatever was last saved here.
-      tutorEnabled: initial.tutorEnabled,
+      tutorMode: tutorMode.value as GameSettings["tutorMode"],
       // Sticky in-game-only settings — preserved across game starts.
       showPipCount: initial.showPipCount,
       showEquity: initial.showEquity,

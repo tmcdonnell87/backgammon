@@ -414,13 +414,15 @@ async function main(): Promise<void> {
     // If a new tutor entry was just recorded and it's an error/blunder,
     // surface the analysis modal so the user can learn from it.
     const s = controller.state;
-    if (
-      s.settings.tutorEnabled &&
-      s.tutor.history.length > lastTutorHistoryLen
-    ) {
+    if (s.tutor.history.length > lastTutorHistoryLen) {
       const newest = s.tutor.history[s.tutor.history.length - 1];
       lastTutorHistoryLen = s.tutor.history.length;
-      if (newest.classification === "error" || newest.classification === "blunder") {
+      // Only "tutor" mode surfaces per-turn flags; "trainer" stays silent until
+      // the end-of-game report.
+      if (
+        s.settings.tutorMode === "tutor" &&
+        (newest.classification === "error" || newest.classification === "blunder")
+      ) {
         openTutorModal(newest, overlayContainer, {
           setTutorPreview,
           onDismiss: () => controller.ackTutor(),
@@ -609,7 +611,7 @@ async function main(): Promise<void> {
             ? `${verb} a gammon`
             : `${verb} a backgammon`;
       m.innerHTML = `<h2>${escapeHtml(winnerName)} ${kind}!</h2>`;
-      if (s.settings.tutorEnabled && s.tutor.history.length > 0) {
+      if (s.settings.tutorMode !== "off" && s.tutor.history.length > 0) {
         const reportSlot = document.createElement("div");
         renderPostGameReport(reportSlot, s.tutor.history, wName, bName);
         m.appendChild(reportSlot);
@@ -641,7 +643,7 @@ async function main(): Promise<void> {
       const matchVerb = winnerIsSecondPerson(winnerName) ? "win" : "wins";
       m.innerHTML = `<h2>${escapeHtml(winnerName)} ${matchVerb} the match!</h2>
         <p>${escapeHtml(wName)} ${s.whiteScore} — ${s.blackScore} ${escapeHtml(bName)}</p>`;
-      if (s.settings.tutorEnabled && s.tutor.history.length > 0) {
+      if (s.settings.tutorMode !== "off" && s.tutor.history.length > 0) {
         const reportSlot = document.createElement("div");
         renderPostGameReport(reportSlot, s.tutor.history, wName, bName);
         m.appendChild(reportSlot);

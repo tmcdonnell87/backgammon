@@ -27,7 +27,7 @@ const SETTINGS_2P: GameSettings = {
   whiteName: "White",
   blackName: "Black",
   cpuDifficulty: "casual",
-  tutorEnabled: false,
+  tutorMode: "off",
   showPipCount: false,
   showEquity: false,
 };

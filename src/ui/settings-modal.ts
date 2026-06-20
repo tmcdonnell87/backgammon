@@ -8,9 +8,13 @@ export function openSettingsModal(controller: GameController, overlayContainer: 
   const s = controller.state.settings;
   modal.innerHTML = `
     <h2>Settings</h2>
-    <label class="checkbox">
-      <input type="checkbox" name="tutor" ${s.tutorEnabled ? "checked" : ""}/>
-      <span>Tutor mode <em>— flags errors and blunders after each move</em></span>
+    <label>
+      <span>Tutor mode <em>— in-game coaching</em></span>
+      <select name="tutor">
+        <option value="tutor">Tutor — show errors on every turn</option>
+        <option value="trainer">Trainer — rate your play at the end</option>
+        <option value="off">None</option>
+      </select>
     </label>
     <label class="checkbox">
       <input type="checkbox" name="pip" ${s.showPipCount ? "checked" : ""}/>
@@ -27,7 +31,8 @@ export function openSettingsModal(controller: GameController, overlayContainer: 
   backdrop.appendChild(modal);
   overlayContainer.appendChild(backdrop);
 
-  const tutorBox = modal.querySelector<HTMLInputElement>('input[name="tutor"]')!;
+  const tutorSel = modal.querySelector<HTMLSelectElement>('select[name="tutor"]')!;
+  tutorSel.value = s.tutorMode;
   const pipBox = modal.querySelector<HTMLInputElement>('input[name="pip"]')!;
   const equityBox = modal.querySelector<HTMLInputElement>('input[name="equity"]')!;
 
@@ -35,7 +40,7 @@ export function openSettingsModal(controller: GameController, overlayContainer: 
   const applyOne = (patch: Partial<typeof s>): void => {
     controller.setSettings({ ...controller.state.settings, ...patch });
   };
-  tutorBox.addEventListener("change", () => applyOne({ tutorEnabled: tutorBox.checked }));
+  tutorSel.addEventListener("change", () => applyOne({ tutorMode: tutorSel.value as typeof s.tutorMode }));
   pipBox.addEventListener("change", () => applyOne({ showPipCount: pipBox.checked }));
   equityBox.addEventListener("change", () => applyOne({ showEquity: equityBox.checked }));
 
